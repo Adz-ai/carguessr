@@ -1,0 +1,223 @@
+basePath: /
+definitions:
+  models.Car:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      features:
+        items:
+          type: string
+        type: array
+      fuelType:
+        type: string
+      id:
+        type: string
+      images:
+        items:
+          type: string
+        type: array
+      location:
+        type: string
+      make:
+        type: string
+      mileage:
+        type: integer
+      model:
+        type: string
+      originalUrl:
+        type: string
+      price:
+        type: number
+      transmission:
+        type: string
+      vin:
+        type: string
+      year:
+        type: integer
+    type: object
+  models.GuessRequest:
+    properties:
+      gameMode:
+        enum:
+        - zero
+        - streak
+        type: string
+      guessedPrice:
+        minimum: 0
+        type: number
+      listingId:
+        type: string
+    required:
+    - gameMode
+    - guessedPrice
+    - listingId
+    type: object
+  models.GuessResponse:
+    properties:
+      actualPrice:
+        type: number
+      correct:
+        type: boolean
+      difference:
+        type: number
+      gameOver:
+        type: boolean
+      guessedPrice:
+        type: number
+      message:
+        type: string
+      originalUrl:
+        type: string
+      percentage:
+        type: number
+      score:
+        type: integer
+    type: object
+  models.LeaderboardEntry:
+    properties:
+      date:
+        type: string
+      gameMode:
+        type: string
+      name:
+        type: string
+      score:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: A fun game API where players guess car prices from real AutoTrader
+    UK listings
+  title: AutoTrader Price Guesser API
+  version: "1.0"
+paths:
+  /api/check-guess:
+    post:
+      consumes:
+      - application/json
+      description: Submit a price guess and get feedback on accuracy, score, and game
+        status
+      parameters:
+      - description: Price guess data
+        in: body
+        name: guess
+        required: true
+        schema:
+          $ref: '#/definitions/models.GuessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GuessResponse'
+        "400":
+          description: 'error: Invalid request'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error: Listing not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a price guess for a car
+      tags:
+      - game
+  /api/data-source:
+    get:
+      description: Returns information about the current data source being used for
+        car listings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data_source, total_listings, and description
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get current data source information
+      tags:
+      - debug
+  /api/leaderboard:
+    get:
+      description: Returns the leaderboard optionally filtered by game mode
+      parameters:
+      - description: Game mode filter (zero or streak)
+        in: query
+        name: mode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.LeaderboardEntry'
+            type: array
+      summary: Get the game leaderboard
+      tags:
+      - game
+  /api/listings:
+    get:
+      description: Returns all car listings currently loaded in the system with full
+        details including prices
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: count and cars array
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all available car listings
+      tags:
+      - listings
+  /api/random-listing:
+    get:
+      description: Returns a random car listing with the price hidden (set to 0) for
+        the guessing game
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Car'
+        "404":
+          description: 'error: No listings available'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a random car listing for the game
+      tags:
+      - game
+  /api/test-scraper:
+    get:
+      description: Tests the AutoTrader scraper and returns up to 10 cars with full
+        details
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message, count, and cars array
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: error and message
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Test the car scraper directly
+      tags:
+      - debug
+swagger: "2.0"

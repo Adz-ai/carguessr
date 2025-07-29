@@ -1,0 +1,439 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #1a365d 0%, #2d5aa0 50%, #4c8fe7 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    text-align: center;
+    color: white;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.score-display {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    border-radius: 25px;
+    backdrop-filter: blur(10px);
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* Mode Selection */
+.mode-selection {
+    text-align: center;
+    color: white;
+}
+
+.mode-selection h2 {
+    font-size: 2rem;
+    margin-bottom: 30px;
+}
+
+.mode-cards {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.mode-card {
+    background: white;
+    border-radius: 15px;
+    padding: 40px;
+    width: 300px;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    color: #333;
+}
+
+.mode-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.mode-card h3 {
+    color: #2d5aa0;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+}
+
+.mode-card p {
+    margin-bottom: 10px;
+}
+
+.mode-description {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Game Area */
+.game-area {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+/* Car Display */
+.car-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.car-images {
+    position: relative;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.car-image {
+    width: 100%;
+    height: 400px;
+    object-fit: cover;
+    border-radius: 15px;
+}
+
+.car-info h2 {
+    color: #2d5aa0;
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+}
+
+.car-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.detail-label {
+    font-weight: bold;
+    color: #666;
+}
+
+.detail-value {
+    color: #333;
+}
+
+.features h4 {
+    color: #2d5aa0;
+    margin-bottom: 15px;
+}
+
+.features-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.features-list li {
+    padding: 8px 15px;
+    background: #f5f7ff;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Guess Section */
+.guess-section {
+    text-align: center;
+    background: #f5f7ff;
+    padding: 30px;
+    border-radius: 15px;
+}
+
+.guess-section h3 {
+    color: #2d5aa0;
+    font-size: 1.5rem;
+    margin-bottom: 25px;
+}
+
+.price-input-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+
+.currency {
+    font-size: 2rem;
+    color: #2d5aa0;
+}
+
+.price-input {
+    width: 200px;
+    padding: 15px;
+    font-size: 1.5rem;
+    border: 2px solid #2d5aa0;
+    border-radius: 10px;
+    text-align: center;
+    outline: none;
+}
+
+.price-input:focus {
+    border-color: #1a365d;
+}
+
+.price-slider-container {
+    margin-bottom: 30px;
+}
+
+.price-slider {
+    width: 100%;
+    max-width: 400px;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #ddd;
+    border-radius: 5px;
+    outline: none;
+}
+
+.price-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    background: #2d5aa0;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.price-slider::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    background: #2d5aa0;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    max-width: 400px;
+    margin: 10px auto 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.submit-button {
+    background: linear-gradient(135deg, #2d5aa0 0%, #1a365d 100%);
+    color: white;
+    border: none;
+    padding: 15px 50px;
+    font-size: 1.2rem;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.submit-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(45, 90, 160, 0.4);
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    animation: modalSlide 0.3s ease-out;
+}
+
+@keyframes modalSlide {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h2 {
+    color: #2d5aa0;
+    font-size: 2rem;
+    margin-bottom: 25px;
+}
+
+.result-details {
+    margin-bottom: 25px;
+}
+
+.result-details p {
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.price-highlight {
+    font-weight: bold;
+    color: #1a365d;
+}
+
+.result-message {
+    font-size: 1.1rem;
+    color: #666;
+    margin-bottom: 25px;
+}
+
+.original-link-container {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.original-link {
+    display: inline-block;
+    background: #2d5aa0;
+    color: white;
+    padding: 12px 24px;
+    text-decoration: none;
+    border-radius: 25px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(45, 90, 160, 0.3);
+}
+
+.original-link:hover {
+    background: #1a365d;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(45, 90, 160, 0.4);
+    text-decoration: none;
+    color: white;
+}
+
+.final-score {
+    font-size: 1.5rem;
+    color: #2d5aa0;
+    margin-bottom: 30px;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+.next-button, .end-button, .play-again-button {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 25px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.next-button, .play-again-button {
+    background: #2d5aa0;
+    color: white;
+}
+
+.end-button {
+    background: #f5f7ff;
+    color: #2d5aa0;
+}
+
+.next-button:hover, .end-button:hover, .play-again-button:hover {
+    transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .score-display {
+        position: static;
+        margin-top: 20px;
+        display: inline-block;
+    }
+    
+    .car-display {
+        grid-template-columns: 1fr;
+    }
+    
+    .car-image {
+        height: 250px;
+    }
+    
+    .car-details {
+        grid-template-columns: 1fr;
+    }
+    
+    .features-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .mode-cards {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .price-input {
+        width: 150px;
+        font-size: 1.2rem;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .next-button, .end-button, .play-again-button {
+        width: 100%;
+    }
+}

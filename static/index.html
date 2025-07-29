@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motors Price Guesser</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Motors Price Guesser</h1>
+            <div class="score-display" id="scoreDisplay" style="display: none;">
+                <span id="scoreLabel">Score: </span>
+                <span id="scoreValue">0</span>
+            </div>
+            <div id="dataSourceInfo" style="font-size: 0.8em; color: #666; margin-top: 5px;"></div>
+        </header>
+
+        <!-- Game Mode Selection -->
+        <div id="modeSelection" class="mode-selection">
+            <h2>Choose Your Game Mode</h2>
+            <div class="mode-cards">
+                <div class="mode-card" onclick="startGame('zero')">
+                    <h3>Stay at Zero</h3>
+                    <p>Accumulate the lowest total difference</p>
+                    <p class="mode-description">Guess car prices and try to keep your cumulative error as close to zero as possible!</p>
+                </div>
+                <div class="mode-card" onclick="startGame('streak')">
+                    <h3>Streak Mode</h3>
+                    <p>Guess within 10% or game over!</p>
+                    <p class="mode-description">Build your streak by guessing within 10% of the actual price. One wrong guess ends the game!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Area -->
+        <div id="gameArea" class="game-area" style="display: none;">
+            <!-- Car Display -->
+            <div class="car-display">
+                <div class="car-images">
+                    <img id="carImage" src="" alt="Car Image" class="car-image">
+                </div>
+                
+                <div class="car-info">
+                    <h2 id="carTitle"></h2>
+                    <div class="car-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Year:</span>
+                            <span id="carYear" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Engine Size:</span>
+                            <span id="carEngine" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Mileage:</span>
+                            <span id="carMileage" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Fuel Type:</span>
+                            <span id="carFuelType" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Gearbox:</span>
+                            <span id="carGearbox" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Body Type:</span>
+                            <span id="carBodyType" class="detail-value"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price Guess Section -->
+            <div class="guess-section">
+                <h3>What's Your Price Guess?</h3>
+                <div class="price-input-container">
+                    <span class="currency">£</span>
+                    <input type="number" id="priceGuess" class="price-input" min="0" step="100" placeholder="Enter price">
+                </div>
+                <div class="price-slider-container">
+                    <input type="range" id="priceSlider" class="price-slider" min="5000" max="100000" step="500">
+                    <div class="slider-labels">
+                        <span>£5,000</span>
+                        <span>£100,000</span>
+                    </div>
+                </div>
+                <button id="submitGuess" class="submit-button" onclick="submitGuess()">Submit Guess</button>
+            </div>
+        </div>
+
+        <!-- Result Modal -->
+        <div id="resultModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="resultTitle"></h2>
+                <div class="result-details">
+                    <p>Actual Price: <span id="actualPrice" class="price-highlight"></span></p>
+                    <p>Your Guess: <span id="yourGuess" class="price-highlight"></span></p>
+                    <p>Difference: <span id="priceDifference" class="price-highlight"></span></p>
+                    <p>Accuracy: <span id="accuracy" class="price-highlight"></span></p>
+                </div>
+                <p id="resultMessage" class="result-message"></p>
+                <div id="originalLink" style="display: none;" class="original-link-container"></div>
+                <div class="modal-buttons">
+                    <button onclick="nextRound()" class="next-button">Next Car</button>
+                    <button onclick="endGame()" class="end-button">End Game</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="gameOverModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Game Over!</h2>
+                <p id="finalScore" class="final-score"></p>
+                <div class="modal-buttons">
+                    <button onclick="location.reload()" class="play-again-button">Play Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/game.js"></script>
+</body>
+</html>
