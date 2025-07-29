@@ -17,14 +17,16 @@ import (
 
 // MotorsUKScraper handles scraping from Motors.co.uk
 type MotorsUKScraper struct {
-	browser *rod.Browser
-	enabled bool
+	browser                 *rod.Browser
+	enabled                 bool
+	enableDetailEnhancement bool
 }
 
 // NewMotorsUKScraper creates a new Motors UK scraper
 func NewMotorsUKScraper() *MotorsUKScraper {
 	return &MotorsUKScraper{
-		enabled: true, // Enabled by default
+		enabled:                 true, // Enabled by default
+		enableDetailEnhancement: true, // Always enabled - stealth handles detection
 	}
 }
 
@@ -135,6 +137,10 @@ func (s *MotorsUKScraper) scrapeSingleLocation(searchParam string, maxListings i
 	defer page.Close()
 
 	searchURL := "https://www.motors.co.uk/search/car/" + searchParam
+
+	// Apply stealth to this page before navigation
+	s.applyPageStealth(page)
+
 	page.MustNavigate(searchURL).MustWaitLoad()
 
 	// Handle postcode requirement if present
@@ -184,8 +190,8 @@ func (s *MotorsUKScraper) scrapeSingleLocation(searchParam string, maxListings i
 
 			car := s.parseListingElement(element)
 			if car != nil && car.Make != "" && car.Price > 0 {
-				// Try to enhance with detail page data
-				if car.OriginalURL != "" {
+				// Try to enhance with detail page data (only if enabled)
+				if s.enableDetailEnhancement && car.OriginalURL != "" {
 					err := s.enhanceCarWithDetailPage(car)
 					if err != nil {
 						fmt.Printf("  ⚠️  Could not enhance %s %s: %v\\n", car.Make, car.Model, err)
@@ -647,10 +653,13 @@ func (s *MotorsUKScraper) isValidCarImage(url string) bool {
 }
 
 func (s *MotorsUKScraper) initBrowser() error {
-	// Configure browser for both local and Docker environments
+	// Configure browser to mimic Windows Chrome (less suspicious than Mac on Linux)
+	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 	l := launcher.New().
 		Headless(true).
 		Set("disable-blink-features", "AutomationControlled").
+		Set("exclude-switches", "enable-automation").
 		Set("disable-dev-shm-usage").
 		Set("no-sandbox").
 		Set("disable-gpu").
@@ -659,8 +668,15 @@ func (s *MotorsUKScraper) initBrowser() error {
 		Set("disable-renderer-backgrounding").
 		Set("disable-backgrounding-occluded-windows").
 		Set("disable-ipc-flooding-protection").
-		Set("window-size", "1920,1080").
-		Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		Set("disable-web-security").
+		Set("disable-features", "VizDisplayCompositor").
+		Set("window-size", "1920,1080"). // Common Windows resolution
+		Set("user-agent", userAgent).
+		Set("accept-language", "en-GB,en-US;q=0.9,en;q=0.8").
+		Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8").
+		Set("sec-ch-ua", `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`).
+		Set("sec-ch-ua-mobile", "?0").
+		Set("sec-ch-ua-platform", `"Windows"`)
 
 	// Check for Chromium first (common in containers)
 	if chromiumPath := findChromiumPath(); chromiumPath != "" {
@@ -670,12 +686,26 @@ func (s *MotorsUKScraper) initBrowser() error {
 
 	// Check if running in Docker and add additional flags
 	if isDockerEnvironment() {
-		fmt.Println("🐳 Docker environment detected, applying container-specific settings")
+		fmt.Println("🐳 Docker environment detected, applying enhanced stealth settings")
 		l = l.Set("remote-debugging-port", "9222").
 			Set("disable-setuid-sandbox").
 			Set("no-first-run").
 			Set("disable-default-apps").
-			Set("single-process") // Use single process in containers
+			Set("disable-sync").
+			Set("disable-translate").
+			Set("hide-scrollbars").
+			Set("mute-audio").
+			Set("disable-background-networking").
+			Set("disable-background-timer-throttling").
+			Set("disable-renderer-backgrounding").
+			Set("disable-backgrounding-occluded-windows").
+			Set("disable-client-side-phishing-detection").
+			Set("disable-default-apps").
+			Set("disable-hang-monitor").
+			Set("disable-prompt-on-repost").
+			Set("disable-domain-reliability").
+			Set("disable-component-extensions-with-background-pages")
+		// Don't use single-process in production as it can be unstable
 	}
 
 	url, err := l.Launch()
@@ -689,8 +719,97 @@ func (s *MotorsUKScraper) initBrowser() error {
 		return fmt.Errorf("failed to connect to browser: %v", err)
 	}
 
+	// Skip global stealth application - apply per-page instead
+	// err = s.applyStealth()
+	// if err != nil {
+	// 	fmt.Printf("⚠️  Warning: Could not apply all stealth measures: %v\n", err)
+	// }
+
 	fmt.Println("✅ Browser initialized successfully")
 	return nil
+}
+
+// applyStealth applies additional stealth measures to avoid detection
+func (s *MotorsUKScraper) applyStealth() error {
+	// Apply stealth through page evaluation with proper timing
+	page := s.browser.MustPage()
+	defer page.Close()
+
+	// Navigate to a simple page first to ensure browser context is ready
+	err := page.Navigate("about:blank")
+	if err != nil {
+		return fmt.Errorf("failed to navigate to blank page: %v", err)
+	}
+
+	// Wait for page to be ready
+	page.MustWaitLoad()
+
+	// Apply stealth measures one by one with error handling
+	stealthCommands := []string{
+		`Object.defineProperty(navigator, 'webdriver', { get: () => undefined })`,
+		`Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] })`,
+		`Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en-US', 'en'] })`,
+		`Object.defineProperty(navigator, 'platform', { get: () => 'Win32' })`,
+		`if (typeof window.chrome === 'undefined') { Object.defineProperty(window, 'chrome', { get: () => ({ runtime: {} }) }) }`,
+	}
+
+	for i, cmd := range stealthCommands {
+		_, err := page.Eval(cmd)
+		if err != nil {
+			fmt.Printf("⚠️  Stealth command %d failed: %v\n", i+1, err)
+			// Continue with other commands rather than failing completely
+		}
+	}
+
+	fmt.Println("✅ Stealth measures applied successfully")
+	return nil
+}
+
+// applyPageStealth applies stealth measures to a specific page
+func (s *MotorsUKScraper) applyPageStealth(page *rod.Page) {
+	// Apply stealth through script injection to mimic Mac Chrome
+	stealthScript := `
+		// Remove webdriver indicators
+		if (navigator.webdriver !== undefined) {
+			delete navigator.__proto__.webdriver;
+		}
+		
+		// Override properties to match Windows Chrome
+		try {
+			Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+			Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+			Object.defineProperty(navigator, 'plugins', { 
+				get: () => ([
+					{name: 'Chrome PDF Plugin', description: 'Portable Document Format', filename: 'internal-pdf-viewer'},
+					{name: 'Chrome PDF Viewer', description: 'Portable Document Format', filename: 'internal-pdf-viewer'},
+					{name: 'Native Client', description: 'Native Client', filename: 'internal-nacl-plugin'}
+				])
+			});
+			Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en-US', 'en'] });
+			Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+			Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+			Object.defineProperty(screen, 'width', { get: () => 1920 });
+			Object.defineProperty(screen, 'height', { get: () => 1080 });
+			Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+			Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
+			Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+			Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
+			
+			// Windows-specific navigator properties
+			Object.defineProperty(navigator, 'appVersion', { 
+				get: () => '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			});
+		} catch (e) {
+			// Ignore errors in stealth application
+		}
+	`
+
+	// Add script to page
+	err := page.AddScriptTag("", stealthScript)
+	if err != nil {
+		// Continue silently - stealth is best-effort
+		fmt.Printf("  ⚠️  Could not inject stealth script: %v\n", err)
+	}
 }
 
 func (s *MotorsUKScraper) closeBrowser() {
@@ -701,6 +820,7 @@ func (s *MotorsUKScraper) closeBrowser() {
 
 // enhanceCarWithDetailPage enhances car data by visiting the detail page
 func (s *MotorsUKScraper) enhanceCarWithDetailPage(car *models.Car) error {
+
 	// Create a new page for the detail view
 	detailPage := s.browser.MustPage()
 	defer func() {
@@ -710,8 +830,16 @@ func (s *MotorsUKScraper) enhanceCarWithDetailPage(car *models.Car) error {
 		detailPage.Close()
 	}()
 
+	// Apply stealth measures to this page
+	s.applyPageStealth(detailPage)
+
 	// Set timeout for the entire operation
-	ctx := detailPage.Timeout(15 * time.Second)
+	ctx := detailPage.Timeout(10 * time.Second)
+
+	// Add human-like delay with variation
+	humanDelay := time.Duration(3+rand.Intn(5)) * time.Second
+	fmt.Printf("  ⏱️  Human-like delay: %v\n", humanDelay)
+	time.Sleep(humanDelay)
 
 	// Navigate with error handling
 	err := ctx.Navigate(car.OriginalURL)
@@ -730,9 +858,34 @@ func (s *MotorsUKScraper) enhanceCarWithDetailPage(car *models.Car) error {
 
 	// Check if we hit bot detection or error page
 	title := detailPage.MustInfo().Title
-	if strings.Contains(strings.ToLower(title), "not found") ||
-		strings.Contains(strings.ToLower(title), "error") {
-		return fmt.Errorf("page not available: %s", title)
+	titleLower := strings.ToLower(title)
+
+	// More specific bot detection patterns
+	if strings.Contains(titleLower, "not found") ||
+		strings.Contains(titleLower, "error") ||
+		strings.Contains(titleLower, "blocked") ||
+		strings.Contains(titleLower, "access denied") ||
+		strings.Contains(titleLower, "security check") ||
+		titleLower == "" {
+
+		// Try one more time with a longer delay
+		fmt.Printf("  🔄 Possible bot detection detected (%s), retrying...\n", title)
+		time.Sleep(5 * time.Second)
+
+		// Refresh the page
+		err = detailPage.Reload()
+		if err == nil {
+			time.Sleep(3 * time.Second)
+			newTitle := detailPage.MustInfo().Title
+			if !strings.Contains(strings.ToLower(newTitle), "error") && newTitle != "" {
+				title = newTitle
+				fmt.Printf("  ✓ Retry successful: %s\n", title)
+			} else {
+				return fmt.Errorf("page blocked after retry: %s", newTitle)
+			}
+		} else {
+			return fmt.Errorf("page blocked and reload failed: %s", title)
+		}
 	}
 
 	fmt.Printf("  ✓ Detail page loaded: %s\n", title)

@@ -31,6 +31,15 @@ func main() {
 	// Initialize Gin router
 	r := gin.Default()
 
+	// Configure trusted proxies for Cloudflare Tunnels
+	r.SetTrustedProxies([]string{
+		"127.0.0.1",
+		"::1",
+		"172.16.0.0/12",  // Docker networks
+		"10.0.0.0/8",     // Private networks
+		"192.168.0.0/16", // Private networks
+	})
+
 	// Configure CORS
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}

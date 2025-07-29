@@ -7,7 +7,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o motors-guesser cmd/server/main.go
+# Build for target architecture (defaults to amd64 for most servers)
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o motors-guesser cmd/server/main.go
 
 # Production image with Chromium
 FROM debian:bullseye-slim

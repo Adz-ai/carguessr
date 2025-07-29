@@ -25,20 +25,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Optional: Reverse proxy with SSL
-  nginx:
-    image: nginx:alpine
-    container_name: motors-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # Your SSL certificates
-    depends_on:
-      - motors-guesser
-    restart: unless-stopped
-
 networks:
   default:
     name: motors-network
