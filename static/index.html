@@ -40,7 +40,10 @@
             <!-- Car Display -->
             <div class="car-display">
                 <div class="car-images">
-                    <img id="carImage" src="" alt="Car Image" class="car-image">
+                    <div class="image-gallery" id="imageGallery">
+                        <img id="mainCarImage" src="" alt="Car Image" class="main-car-image">
+                        <div class="thumbnail-strip" id="thumbnailStrip"></div>
+                    </div>
                 </div>
                 
                 <div class="car-info">
@@ -70,6 +73,14 @@
                             <span class="detail-label">Body Type:</span>
                             <span id="carBodyType" class="detail-value"></span>
                         </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Doors:</span>
+                            <span id="carDoors" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Seats:</span>
+                            <span id="carSeats" class="detail-value"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -79,13 +90,13 @@
                 <h3>What's Your Price Guess?</h3>
                 <div class="price-input-container">
                     <span class="currency">£</span>
-                    <input type="number" id="priceGuess" class="price-input" min="0" step="100" placeholder="Enter price">
+                    <input type="text" id="priceGuess" class="price-input" placeholder="Enter price">
                 </div>
                 <div class="price-slider-container">
-                    <input type="range" id="priceSlider" class="price-slider" min="5000" max="100000" step="500">
+                    <input type="range" id="priceSlider" class="price-slider" min="0" max="1000000" step="1000">
                     <div class="slider-labels">
-                        <span>£5,000</span>
-                        <span>£100,000</span>
+                        <span>£0</span>
+                        <span>£1,000,000</span>
                     </div>
                 </div>
                 <button id="submitGuess" class="submit-button" onclick="submitGuess()">Submit Guess</button>

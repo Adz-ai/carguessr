@@ -31,10 +31,10 @@ func NewHandler() *Handler {
 		zeroScores:   make(map[string]float64),
 		streakScores: make(map[string]int),
 	}
-	
+
 	// Initialize with some mock data
 	h.initializeMockData()
-	
+
 	return h
 }
 
@@ -140,7 +140,7 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 			response.GameOver = true
 			response.Score = h.streakScores[sessionID]
 			response.Message = "Game Over! Your guess was off by more than 10%"
-			
+
 			// Reset streak
 			delete(h.streakScores, sessionID)
 		}
@@ -162,7 +162,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	defer h.mu.RUnlock()
 
 	gameMode := c.Query("mode")
-	
+
 	// Filter leaderboard by game mode if specified
 	filtered := make([]models.LeaderboardEntry, 0)
 	for _, entry := range h.leaderboard {
@@ -186,24 +186,24 @@ func (h *Handler) TestScraper(c *gin.Context) {
 	cars, err := h.scraper.GetCarListings(10)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error":   err.Error(),
 			"message": "Scraper failed",
 		})
 		return
 	}
-	
+
 	if len(cars) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "No cars found from scraper",
-			"cars": cars,
+			"cars":    cars,
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Scraper working!",
-		"count": len(cars),
-		"cars": cars,
+		"count":   len(cars),
+		"cars":    cars,
 	})
 }
 
@@ -218,11 +218,11 @@ func (h *Handler) GetDataSource(c *gin.Context) {
 	h.mu.RLock()
 	totalListings := len(h.listings)
 	h.mu.RUnlock()
-	
+
 	c.JSON(http.StatusOK, gin.H{
-		"data_source": "motors_live",
+		"data_source":    "motors_live",
 		"total_listings": totalListings,
-		"description": "Real Motors.co.uk car listings",
+		"description":    "Real Motors.co.uk car listings",
 	})
 }
 
@@ -244,14 +244,14 @@ func (h *Handler) GetAllListings(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"count": len(cars),
-		"cars": cars,
+		"cars":  cars,
 	})
 }
 
 func (h *Handler) initializeMockData() {
 	// Load car data using the unified scraper interface
 	fmt.Println("Starting Motors.co.uk scraper...")
-	cars, err := h.scraper.GetCarListings(5) // Get 5 cars for testing
+	cars, err := h.scraper.GetCarListings(50) // Get 50 cars with variety across makes
 	if err == nil && len(cars) > 0 {
 		h.mu.Lock()
 		defer h.mu.Unlock()
@@ -261,10 +261,10 @@ func (h *Handler) initializeMockData() {
 		fmt.Printf("✅ Loaded %d real cars from Motors.co.uk\n", len(cars))
 		return
 	}
-	
+
 	fmt.Printf("❌ Motors scraper failed: %v\n", err)
 	fmt.Println("Loading fallback cars for testing...")
-	
+
 	// Fallback to static mock data
 	mockCars := []models.Car{
 		{
@@ -361,7 +361,7 @@ func (h *Handler) initializeMockData() {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	for i := range mockCars {
 		h.listings[mockCars[i].ID] = &mockCars[i]
 	}

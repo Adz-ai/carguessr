@@ -46,9 +46,9 @@ async function loadNextCar() {
         currentGame.currentListing = listing;
         displayCar(listing);
         
-        // Reset guess inputs
+        // Reset guess inputs to be synchronized
         document.getElementById('priceGuess').value = '';
-        document.getElementById('priceSlider').value = 50000;
+        document.getElementById('priceSlider').value = 50000; // Set to a reasonable middle value
         
     } catch (error) {
         console.error('Error loading car:', error);
@@ -58,40 +58,159 @@ async function loadNextCar() {
 
 // Display car information
 function displayCar(car) {
-    // Set car image
-    const carImage = document.getElementById('carImage');
-    carImage.src = (car.images && car.images.length > 0) ? car.images[0] : 'https://via.placeholder.com/600x400?text=No+Image';
+    // Animate car info area
+    const carDisplay = document.querySelector('.car-display');
+    carDisplay.style.opacity = '0';
+    carDisplay.style.transform = 'translateY(20px)';
     
-    // Set car title
-    document.getElementById('carTitle').textContent = `${car.year || 'Unknown'} ${car.make || 'Unknown'} ${car.model || 'Unknown'}`;
-    
-    // Set car details
-    document.getElementById('carYear').textContent = car.year || 'Unknown';
-    document.getElementById('carEngine').textContent = car.engine || 'Unknown';
-    document.getElementById('carMileage').textContent = car.mileage ? car.mileage.toLocaleString() + ' miles' : 'Unknown';
-    document.getElementById('carFuelType').textContent = car.fuelType || 'Unknown';
-    document.getElementById('carGearbox').textContent = car.gearbox || 'Unknown';
-    document.getElementById('carBodyType').textContent = car.bodyType || 'Unknown';
+    setTimeout(() => {
+        // Set up image gallery
+        setupImageGallery(car.images || []);
+        
+        // Set car title
+        document.getElementById('carTitle').textContent = `${car.year || 'Unknown'} ${car.make || 'Unknown'} ${car.model || 'Unknown'}`;
+        
+        // Set car details with staggered animation
+        const details = [
+            { id: 'carYear', value: car.year || 'Unknown' },
+            { id: 'carEngine', value: car.engine || 'Unknown' },
+            { id: 'carMileage', value: car.mileage ? car.mileage.toLocaleString() + ' miles' : 'Unknown' },
+            { id: 'carFuelType', value: car.fuelType || 'Unknown' },
+            { id: 'carGearbox', value: car.gearbox || 'Unknown' },
+            { id: 'carBodyType', value: car.bodyType || 'Unknown' },
+            { id: 'carDoors', value: car.doors || 'Unknown' },
+            { id: 'carSeats', value: car.seats || 'Unknown' }
+        ];
+        
+        details.forEach((detail, index) => {
+            const element = document.getElementById(detail.id);
+            element.style.opacity = '0';
+            setTimeout(() => {
+                element.textContent = detail.value;
+                element.style.transition = 'opacity 0.3s ease';
+                element.style.opacity = '1';
+            }, 50 * index);
+        });
+        
+        // Animate car display back in
+        carDisplay.style.transition = 'all 0.5s ease';
+        carDisplay.style.opacity = '1';
+        carDisplay.style.transform = 'translateY(0)';
+    }, 100);
 }
 
-// Sync price input and slider
-document.getElementById('priceGuess').addEventListener('input', function(e) {
-    const value = parseInt(e.target.value) || 0;
-    document.getElementById('priceSlider').value = Math.min(Math.max(value, 5000), 100000);
-});
+// Set up image gallery with multiple photos
+function setupImageGallery(images) {
+    const mainImage = document.getElementById('mainCarImage');
+    const thumbnailStrip = document.getElementById('thumbnailStrip');
+    
+    // Clear existing thumbnails
+    thumbnailStrip.innerHTML = '';
+    
+    if (images.length === 0) {
+        mainImage.src = 'https://via.placeholder.com/600x400?text=No+Image';
+        return;
+    }
+    
+    // Set main image with fade effect
+    mainImage.style.opacity = '0';
+    setTimeout(() => {
+        mainImage.src = images[0];
+        mainImage.style.opacity = '1';
+    }, 200);
+    
+    // Create thumbnails if more than one image
+    if (images.length > 1) {
+        images.forEach((imageUrl, index) => {
+            const thumbnail = document.createElement('img');
+            thumbnail.src = imageUrl;
+            thumbnail.className = 'thumbnail' + (index === 0 ? ' active' : '');
+            thumbnail.onclick = () => switchMainImage(imageUrl, thumbnail);
+            
+            // Add staggered animation
+            thumbnail.style.opacity = '0';
+            thumbnail.style.transform = 'translateY(20px)';
+            thumbnailStrip.appendChild(thumbnail);
+            
+            setTimeout(() => {
+                thumbnail.style.transition = 'all 0.3s ease';
+                thumbnail.style.opacity = '';
+                thumbnail.style.transform = '';
+            }, 50 * index);
+        });
+        
+        // Show thumbnail strip
+        thumbnailStrip.style.display = 'flex';
+    } else {
+        // Hide thumbnail strip if only one image
+        thumbnailStrip.style.display = 'none';
+    }
+}
 
-document.getElementById('priceSlider').addEventListener('input', function(e) {
-    document.getElementById('priceGuess').value = e.target.value;
-});
+// Switch main image when thumbnail clicked
+function switchMainImage(imageUrl, clickedThumbnail) {
+    const mainImage = document.getElementById('mainCarImage');
+    
+    // Fade out, change, fade in
+    mainImage.style.opacity = '0';
+    setTimeout(() => {
+        mainImage.src = imageUrl;
+        mainImage.style.opacity = '1';
+    }, 200);
+    
+    // Update active thumbnail with smooth transition
+    document.querySelectorAll('.thumbnail').forEach(thumb => {
+        thumb.classList.remove('active');
+        thumb.style.transform = '';
+    });
+    clickedThumbnail.classList.add('active');
+    clickedThumbnail.style.transform = 'scale(1.1)';
+}
+
+// Sync price input and slider with improved formatting
+function syncInputToSlider() {
+    const input = document.getElementById('priceGuess');
+    const slider = document.getElementById('priceSlider');
+    
+    let value = input.value.replace(/,/g, ''); // Remove existing commas
+    if (!isNaN(value) && value !== '') {
+        const numValue = parseInt(value);
+        const clampedValue = Math.min(Math.max(numValue, 0), 1000000);
+        
+        // Update slider
+        slider.value = clampedValue;
+        
+        // Format input with commas (but don't trigger another event)
+        input.value = numValue.toLocaleString();
+    }
+}
+
+function syncSliderToInput() {
+    const input = document.getElementById('priceGuess');
+    const slider = document.getElementById('priceSlider');
+    
+    const value = parseInt(slider.value);
+    input.value = value.toLocaleString();
+}
+
 
 // Submit guess
 async function submitGuess() {
-    const guessValue = parseInt(document.getElementById('priceGuess').value);
+    const guessInput = document.getElementById('priceGuess').value.replace(/,/g, ''); // Remove commas
+    const guessValue = parseInt(guessInput);
+    const submitButton = document.querySelector('.submit-button');
     
     if (!guessValue || guessValue <= 0) {
-        alert('Please enter a valid price guess');
+        // Shake the input instead of alert
+        const input = document.getElementById('priceGuess');
+        input.style.animation = 'shake 0.5s';
+        setTimeout(() => input.style.animation = '', 500);
         return;
     }
+    
+    // Add loading state
+    submitButton.innerHTML = '<span class="loading"></span>';
+    submitButton.disabled = true;
     
     try {
         const response = await fetch('/api/check-guess', {
@@ -115,6 +234,10 @@ async function submitGuess() {
     } catch (error) {
         console.error('Error submitting guess:', error);
         alert('Failed to submit guess. Please try again.');
+    } finally {
+        // Reset button
+        submitButton.innerHTML = 'Submit Guess';
+        submitButton.disabled = false;
     }
 }
 
@@ -198,11 +321,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load data source info on page load
     loadDataSourceInfo();
     
-    // Allow Enter key to submit guess
+    // Add shake animation to CSS
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+        
+        .main-car-image { transition: opacity 0.3s ease; }
+        .detail-value { transition: opacity 0.3s ease; }
+    `;
+    document.head.appendChild(style);
+    
+    // Allow Enter key to submit guess and set up slider sync
     const priceGuess = document.getElementById('priceGuess');
+    const priceSlider = document.getElementById('priceSlider');
+    
     priceGuess.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             submitGuess();
         }
+    });
+    
+    // Set up price input and slider synchronization
+    priceGuess.addEventListener('input', syncInputToSlider);
+    priceSlider.addEventListener('input', syncSliderToInput);
+    
+    // Add smooth scrolling
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
     });
 });

@@ -23,8 +23,8 @@ func (s *Scraper) GetCarListings(maxListings int) ([]*models.Car, error) {
 	return s.motorsScraper.ScrapeCarListings(maxListings)
 }
 
-// ScrapeAutotrader wraps the Motors scraper for backward compatibility
-func (s *Scraper) ScrapeAutotrader() ([]*models.Car, error) {
+// ScrapeMotors wraps the Motors scraper for backward compatibility
+func (s *Scraper) ScrapeMotors() ([]*models.Car, error) {
 	return s.GetCarListings(20)
 }
 

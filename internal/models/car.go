@@ -2,26 +2,28 @@ package models
 
 // Car represents a vehicle listing
 type Car struct {
-	ID             string   `json:"id"`
-	Make           string   `json:"make"`
-	Model          string   `json:"model"`
-	Year           int      `json:"year"`
-	Price          float64  `json:"price"`
-	Images         []string `json:"images"`
-	OriginalURL    string   `json:"originalUrl,omitempty"`
-	
+	ID          string   `json:"id"`
+	Make        string   `json:"make"`
+	Model       string   `json:"model"`
+	Year        int      `json:"year"`
+	Price       float64  `json:"price"`
+	Images      []string `json:"images"`
+	OriginalURL string   `json:"originalUrl,omitempty"`
+
 	// Overview section fields
-	Mileage        int      `json:"mileage"`
-	Registration   string   `json:"registration,omitempty"`
-	Owners         string   `json:"owners,omitempty"`
-	FuelType       string   `json:"fuelType"`
-	BodyType       string   `json:"bodyType,omitempty"`
-	Engine         string   `json:"engine,omitempty"`
-	Gearbox        string   `json:"gearbox,omitempty"`
-	Doors          string   `json:"doors,omitempty"`
-	Seats          string   `json:"seats,omitempty"`
-	BodyColour     string   `json:"bodyColour,omitempty"`
-	EmissionClass  string   `json:"emissionClass,omitempty"`
+	Mileage       int    `json:"mileage"`
+	Registration  string `json:"registration,omitempty"`
+	Owners        string `json:"owners,omitempty"`
+	FuelType      string `json:"fuelType"`
+	BodyType      string `json:"bodyType,omitempty"`
+	Engine        string `json:"engine,omitempty"`
+	Gearbox       string `json:"gearbox,omitempty"`
+	Doors         string `json:"doors,omitempty"`
+	Seats         string `json:"seats,omitempty"`
+	BodyColour    string `json:"bodyColour,omitempty"`
+	EmissionClass string `json:"emissionClass,omitempty"`
+
+	// Placeholder for future fields
 }
 
 // GuessRequest represents a price guess from the user

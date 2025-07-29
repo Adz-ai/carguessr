@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  motors-guesser:
+    build: .
+    container_name: motors-price-guesser
+    ports:
+      - "8080:8080"
+    environment:
+      - GIN_MODE=release
+      - CHROME_FLAGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--remote-debugging-port=9222
+    volumes:
+      # Optional: Mount for logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb  # Important for Chrome stability
+    cap_add:
+      - SYS_ADMIN  # Required for Chrome sandboxing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Reverse proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: motors-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # Your SSL certificates
+    depends_on:
+      - motors-guesser
+    restart: unless-stopped
+
+networks:
+  default:
+    name: motors-network

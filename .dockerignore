@@ -1,0 +1,13 @@
+README.md
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+deploy.sh
+logs/
+ssl/
+*.log
+.DS_Store
+node_modules/
+test_*
+.env
