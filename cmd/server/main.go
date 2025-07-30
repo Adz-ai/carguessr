@@ -64,8 +64,17 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "X-Session-ID"}
+	config.ExposeHeaders = []string{"Content-Length", "X-Session-ID"}
+	config.AllowCredentials = true
+	config.MaxAge = 12 * 3600
 	r.Use(cors.New(config))
+
+	// Add request logging middleware for debugging
+	r.Use(func(c *gin.Context) {
+		log.Printf("Request: %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
+		c.Next()
+	})
 
 	// Serve static files
 	r.Static("/static", "./static")

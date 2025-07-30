@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -124,16 +125,23 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 func (h *Handler) CheckGuess(c *gin.Context) {
 	var req models.GuessRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("CheckGuess: Failed to parse JSON - %v", err)
+		log.Printf("CheckGuess: Headers: %v", c.Request.Header)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format", "details": err.Error()})
 		return
 	}
+
+	log.Printf("CheckGuess: Received request - ListingID: %s, GuessedPrice: %.2f, GameMode: %s",
+		req.ListingID, req.GuessedPrice, req.GameMode)
 
 	h.mu.RLock()
 	bonhamsListing, exists := h.bonhamsListings[req.ListingID]
 	h.mu.RUnlock()
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Listing not found"})
+		log.Printf("CheckGuess: Listing not found - ID: %s", req.ListingID)
+		log.Printf("CheckGuess: Available listings: %d", len(h.bonhamsListings))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Listing not found", "requestedId": req.ListingID})
 		return
 	}
 
