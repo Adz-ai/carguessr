@@ -9,12 +9,167 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "https://github.com/your-repo/motors-price-guesser",
+        "contact": {
+            "name": "Motors Price Guesser Support",
+            "url": "https://github.com/your-repo/motors-price-guesser/issues"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/cache-status": {
+            "get": {
+                "description": "Returns information about the current cache status and age",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "debug"
+                ],
+                "summary": "Get cache status information",
+                "responses": {
+                    "200": {
+                        "description": "cache status information",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/challenge/start": {
+            "post": {
+                "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "challenge"
+                ],
+                "summary": "Start a new Challenge Mode session",
+                "responses": {
+                    "200": {
+                        "description": "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0",
+                        "schema": {
+                            "$ref": "#/definitions/models.ChallengeSession"
+                        }
+                    },
+                    "404": {
+                        "description": "error: Not enough cars available for challenge mode",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/challenge/{sessionId}": {
+            "get": {
+                "description": "Returns the current state of a challenge session",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "challenge"
+                ],
+                "summary": "Get current challenge session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ChallengeSession"
+                        }
+                    },
+                    "404": {
+                        "description": "error: Session not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/challenge/{sessionId}/guess": {
+            "post": {
+                "description": "Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "challenge"
+                ],
+                "summary": "Submit a guess for challenge mode",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Challenge Session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Price guess (guessedPrice only)",
+                        "name": "guess",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ChallengeGuessRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "points earned, totalScore, isLastCar, message, originalUrl",
+                        "schema": {
+                            "$ref": "#/definitions/models.ChallengeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "error: Invalid request or session complete",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "error: Session not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/check-guess": {
             "post": {
                 "description": "Submit a price guess and get feedback on accuracy, score, and game status",
@@ -69,7 +224,7 @@ const docTemplate = `{
         },
         "/api/data-source": {
             "get": {
-                "description": "Returns information about the current data source being used for car listings",
+                "description": "Returns information about the data source (Bonhams Car Auctions) including total listings count",
                 "produces": [
                     "application/json"
                 ],
@@ -79,7 +234,7 @@ const docTemplate = `{
                 "summary": "Get current data source information",
                 "responses": {
                     "200": {
-                        "description": "data_source, total_listings, and description",
+                        "description": "data_source: bonhams_auctions, total_listings: count, description: Real Bonhams Car Auction results",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -140,6 +295,35 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/random-enhanced-listing": {
+            "get": {
+                "description": "Returns a random car listing with full auction details and characteristics, price hidden for guessing",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "game"
+                ],
+                "summary": "Get a random car listing with all Bonhams characteristics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.EnhancedCar"
+                        }
+                    },
+                    "404": {
+                        "description": "error: No listings available",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/random-listing": {
             "get": {
                 "description": "Returns a random car listing with the price hidden (set to 0) for the guessing game",
@@ -154,7 +338,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Car"
+                            "$ref": "#/definitions/models.EnhancedCar"
                         }
                     },
                     "404": {
@@ -164,6 +348,27 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/refresh-listings": {
+            "post": {
+                "description": "Triggers a non-blocking background refresh of car listings from Bonhams. Game continues normally during refresh.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Manually refresh car listings",
+                "responses": {
+                    "200": {
+                        "description": "message: refresh started, status: refreshing, note: game continues normally",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -201,25 +406,155 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "models.Car": {
+        "models.ChallengeGuess": {
             "type": "object",
             "properties": {
-                "color": {
+                "actualPrice": {
+                    "type": "number"
+                },
+                "carId": {
+                    "type": "string"
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "guessedPrice": {
+                    "type": "number"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "points": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ChallengeGuessRequest": {
+            "type": "object",
+            "required": [
+                "guessedPrice"
+            ],
+            "properties": {
+                "guessedPrice": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.ChallengeResponse": {
+            "type": "object",
+            "properties": {
+                "actualPrice": {
+                    "type": "number"
+                },
+                "carId": {
+                    "type": "string"
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "guessedPrice": {
+                    "type": "number"
+                },
+                "isLastCar": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "nextCarNumber": {
+                    "type": "integer"
+                },
+                "originalUrl": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "sessionComplete": {
+                    "type": "boolean"
+                },
+                "totalScore": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ChallengeSession": {
+            "type": "object",
+            "properties": {
+                "cars": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.EnhancedCar"
+                    }
+                },
+                "completedTime": {
+                    "type": "string"
+                },
+                "currentCar": {
+                    "type": "integer"
+                },
+                "guesses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ChallengeGuess"
+                    }
+                },
+                "isComplete": {
+                    "type": "boolean"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "startTime": {
+                    "type": "string"
+                },
+                "totalScore": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EnhancedCar": {
+            "type": "object",
+            "properties": {
+                "auctionDetails": {
+                    "description": "Flag indicating this is auction data",
+                    "type": "boolean"
+                },
+                "bodyColour": {
+                    "type": "string"
+                },
+                "bodyType": {
                     "type": "string"
                 },
                 "description": {
+                    "description": "Combined description",
                     "type": "string"
                 },
-                "features": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "doors": {
+                    "type": "string"
+                },
+                "emissionClass": {
+                    "type": "string"
+                },
+                "engine": {
+                    "type": "string"
+                },
+                "exteriorColor": {
+                    "description": "More detailed color",
+                    "type": "string"
                 },
                 "fuelType": {
                     "type": "string"
                 },
+                "gearbox": {
+                    "type": "string"
+                },
                 "id": {
+                    "description": "Standard Car fields",
                     "type": "string"
                 },
                 "images": {
@@ -228,14 +563,27 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "location": {
+                "interiorColor": {
+                    "description": "Interior details",
                     "type": "string"
+                },
+                "keyFacts": {
+                    "description": "Auction key facts",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "make": {
                     "type": "string"
                 },
                 "mileage": {
+                    "description": "Standard overview fields",
                     "type": "integer"
+                },
+                "mileageFormatted": {
+                    "description": "Enhanced Bonhams fields",
+                    "type": "string"
                 },
                 "model": {
                     "type": "string"
@@ -243,13 +591,21 @@ const docTemplate = `{
                 "originalUrl": {
                     "type": "string"
                 },
-                "price": {
-                    "type": "number"
-                },
-                "transmission": {
+                "owners": {
                     "type": "string"
                 },
-                "vin": {
+                "price": {
+                    "description": "Will be 0 for guessing",
+                    "type": "number"
+                },
+                "registration": {
+                    "type": "string"
+                },
+                "seats": {
+                    "type": "string"
+                },
+                "steering": {
+                    "description": "\"Right-hand drive\"",
                     "type": "string"
                 },
                 "year": {
@@ -330,17 +686,39 @@ const docTemplate = `{
                 }
             }
         }
-    }
+    },
+    "tags": [
+        {
+            "description": "Core game endpoints for different game modes",
+            "name": "game"
+        },
+        {
+            "description": "Challenge Mode - GeoGuessr style scoring with 10 cars",
+            "name": "challenge"
+        },
+        {
+            "description": "Car listing management and data access",
+            "name": "listings"
+        },
+        {
+            "description": "Administrative functions for cache and refresh",
+            "name": "admin"
+        },
+        {
+            "description": "Debug and monitoring endpoints",
+            "name": "debug"
+        }
+    ]
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "2.0",
 	Host:             "localhost:8080",
 	BasePath:         "/",
-	Schemes:          []string{},
-	Title:            "AutoTrader Price Guesser API",
-	Description:      "A fun game API where players guess car prices from real AutoTrader UK listings",
+	Schemes:          []string{"http", "https"},
+	Title:            "Motors Price Guesser API",
+	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

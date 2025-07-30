@@ -15,25 +15,27 @@ import (
 	"autotraderguesser/internal/scraper"
 )
 
+const ListingAmount int = 60
+
 type Handler struct {
-	scraper         *scraper.Scraper
-	listings        map[string]*models.Car
-	bonhamsListings map[string]*models.BonhamsCar // Store original Bonhams data
-	leaderboard     []models.LeaderboardEntry
-	mu              sync.RWMutex
-	zeroScores      map[string]float64
-	streakScores    map[string]int
-	refreshTicker   *time.Ticker
+	scraper           *scraper.Scraper
+	bonhamsListings   map[string]*models.BonhamsCar // Only store Bonhams data
+	leaderboard       []models.LeaderboardEntry
+	mu                sync.RWMutex
+	zeroScores        map[string]float64
+	streakScores      map[string]int
+	challengeSessions map[string]*models.ChallengeSession // Store challenge sessions
+	refreshTicker     *time.Ticker
 }
 
 func NewHandler() *Handler {
 	h := &Handler{
-		scraper:         scraper.New(),
-		listings:        make(map[string]*models.Car),
-		bonhamsListings: make(map[string]*models.BonhamsCar),
-		leaderboard:     make([]models.LeaderboardEntry, 0),
-		zeroScores:      make(map[string]float64),
-		streakScores:    make(map[string]int),
+		scraper:           scraper.New(),
+		bonhamsListings:   make(map[string]*models.BonhamsCar),
+		leaderboard:       make([]models.LeaderboardEntry, 0),
+		zeroScores:        make(map[string]float64),
+		streakScores:      make(map[string]int),
+		challengeSessions: make(map[string]*models.ChallengeSession),
 	}
 
 	// Initialize with cached or fresh data
@@ -50,16 +52,16 @@ func NewHandler() *Handler {
 // @Description Returns a random car listing with the price hidden (set to 0) for the guessing game
 // @Tags game
 // @Produce json
-// @Success 200 {object} models.Car
+// @Success 200 {object} models.EnhancedCar
 // @Failure 404 {object} map[string]string "error: No listings available"
 // @Router /api/random-listing [get]
 func (h *Handler) GetRandomListing(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// Get all listing IDs
-	ids := make([]string, 0, len(h.listings))
-	for id := range h.listings {
+	// Get all Bonhams listing IDs
+	ids := make([]string, 0, len(h.bonhamsListings))
+	for id := range h.bonhamsListings {
 		ids = append(ids, id)
 	}
 
@@ -70,13 +72,13 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 
 	// Select random listing
 	randomID := ids[rand.Intn(len(ids))]
-	listing := h.listings[randomID]
+	bonhamsListing := h.bonhamsListings[randomID]
 
-	// Create a copy without the price
-	displayListing := *listing
-	displayListing.Price = 0
+	// Convert to enhanced format and hide price
+	enhancedListing := bonhamsListing.ToEnhancedCar()
+	enhancedListing.Price = 0
 
-	c.JSON(http.StatusOK, displayListing)
+	c.JSON(http.StatusOK, enhancedListing)
 }
 
 // GetRandomEnhancedListing godoc
@@ -127,7 +129,7 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 	}
 
 	h.mu.RLock()
-	listing, exists := h.listings[req.ListingID]
+	bonhamsListing, exists := h.bonhamsListings[req.ListingID]
 	h.mu.RUnlock()
 
 	if !exists {
@@ -136,15 +138,15 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 	}
 
 	// Calculate difference and percentage
-	difference := math.Abs(listing.Price - req.GuessedPrice)
-	percentage := (difference / listing.Price) * 100
+	difference := math.Abs(bonhamsListing.Price - req.GuessedPrice)
+	percentage := (difference / bonhamsListing.Price) * 100
 
 	response := models.GuessResponse{
-		ActualPrice:  listing.Price,
+		ActualPrice:  bonhamsListing.Price,
 		GuessedPrice: req.GuessedPrice,
 		Difference:   difference,
 		Percentage:   percentage,
-		OriginalURL:  listing.OriginalURL,
+		OriginalURL:  bonhamsListing.OriginalURL,
 	}
 
 	// Handle game mode logic
@@ -245,14 +247,14 @@ func (h *Handler) TestScraper(c *gin.Context) {
 
 // GetDataSource godoc
 // @Summary Get current data source information
-// @Description Returns information about the current data source being used for car listings
+// @Description Returns information about the data source (Bonhams Car Auctions) including total listings count
 // @Tags debug
 // @Produce json
-// @Success 200 {object} map[string]interface{} "data_source, total_listings, and description"
+// @Success 200 {object} map[string]interface{} "data_source: bonhams_auctions, total_listings: count, description: Real Bonhams Car Auction results"
 // @Router /api/data-source [get]
 func (h *Handler) GetDataSource(c *gin.Context) {
 	h.mu.RLock()
-	totalListings := len(h.listings)
+	totalListings := len(h.bonhamsListings)
 	h.mu.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
@@ -273,8 +275,8 @@ func (h *Handler) GetAllListings(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	cars := make([]*models.Car, 0, len(h.listings))
-	for _, car := range h.listings {
+	cars := make([]*models.BonhamsCar, 0, len(h.bonhamsListings))
+	for _, car := range h.bonhamsListings {
 		cars = append(cars, car)
 	}
 
@@ -299,154 +301,85 @@ func (h *Handler) loadListingsFromCache(cachedListings []*models.BonhamsCar) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	filteredCount := 0
 	for _, bonhamsCar := range cachedListings {
-		h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
-		h.listings[bonhamsCar.ID] = bonhamsCar.ToStandardCar()
+		if bonhamsCar.Price != 700 {
+			h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
+		} else {
+			filteredCount++
+			fmt.Printf("⚠️ Filtered cached car %s %s %d (£700 - no price found)\n", bonhamsCar.Make, bonhamsCar.Model, bonhamsCar.Year)
+		}
+	}
+
+	if filteredCount > 0 {
+		fmt.Printf("⚠️ Filtered %d cars with £700 price from cache\n", filteredCount)
 	}
 }
 
 func (h *Handler) refreshListings() {
 	fmt.Println("🔄 Refreshing listings from Bonhams Car Auctions...")
 
-	// Get fresh Bonhams data
-	bonhamsCars, err := h.scraper.GetBonhamsListings(50)
+	// Get fresh Bonhams data (increased from 50 to 100 due to sold-only filtering)
+	bonhamsCars, err := h.scraper.GetBonhamsListings(ListingAmount)
 	if err == nil && len(bonhamsCars) > 0 {
+		// Filter out listings with £700 price (indicates missing price data)
+		var validCars []*models.BonhamsCar
+		for _, car := range bonhamsCars {
+			if car.Price != 700 {
+				validCars = append(validCars, car)
+			} else {
+				fmt.Printf("⚠️ Filtered out %s %s %d (£700 - no price found)\n", car.Make, car.Model, car.Year)
+			}
+		}
+
 		h.mu.Lock()
 		// Clear existing listings
-		h.listings = make(map[string]*models.Car)
 		h.bonhamsListings = make(map[string]*models.BonhamsCar)
 
-		// Load new listings
-		for _, bonhamsCar := range bonhamsCars {
+		// Load valid listings only
+		for _, bonhamsCar := range validCars {
 			h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
-			h.listings[bonhamsCar.ID] = bonhamsCar.ToStandardCar()
 		}
 		h.mu.Unlock()
 
-		// Save to cache
-		if err := cache.SaveToCache(bonhamsCars); err != nil {
+		// Save filtered listings to cache
+		if err := cache.SaveToCache(validCars); err != nil {
 			fmt.Printf("⚠️ Failed to save cache: %v\n", err)
 		}
 
-		fmt.Printf("✅ Refreshed %d cars from Bonhams Car Auctions\n", len(bonhamsCars))
+		fmt.Printf("✅ Refreshed %d valid cars from Bonhams Car Auctions (%d filtered out)\n", len(validCars), len(bonhamsCars)-len(validCars))
 		return
 	}
 
-	// Fallback to standard scraper
-	cars, err := h.scraper.GetCarListings(50)
-	if err == nil && len(cars) > 0 {
-		h.mu.Lock()
-		h.listings = make(map[string]*models.Car)
-		for _, car := range cars {
-			h.listings[car.ID] = car
-		}
-		h.mu.Unlock()
-		fmt.Printf("✅ Loaded %d cars from fallback scraper\n", len(cars))
-		return
-	}
-
-	fmt.Printf("❌ All scrapers failed: %v\n", err)
-	fmt.Println("Loading fallback cars for testing...")
+	fmt.Printf("❌ Bonhams scraper failed: %v\n", err)
+	fmt.Println("Creating minimal mock data for testing...")
 
 	// Fallback to static mock data
-	mockCars := []models.Car{
+	mockCars := []*models.BonhamsCar{
 		{
-			ID:           "mock1",
-			Make:         "Volkswagen",
-			Model:        "Golf",
-			Year:         2020,
-			Price:        18995,
-			Mileage:      28000,
-			FuelType:     "Petrol",
-			Images:       []string{"https://images.unsplash.com/photo-1609521263047-f8f205293f24?w=600&h=400&fit=crop"},
-			Registration: "70 VWG",
-			Owners:       "2 previous owners",
-			BodyType:     "Hatchback",
-			Engine:       "1.4 TSI",
-			Gearbox:      "Manual",
-			Doors:        "5",
-			Seats:        "5",
-			BodyColour:   "Silver",
-		},
-		{
-			ID:           "mock2",
-			Make:         "Nissan",
-			Model:        "Qashqai",
-			Year:         2019,
-			Price:        22750,
-			Mileage:      34000,
-			FuelType:     "Diesel",
-			Images:       []string{"https://images.unsplash.com/photo-1606611013016-969c19ba1fbb?w=600&h=400&fit=crop"},
-			Registration: "69 NIS",
-			Owners:       "1 previous owner",
-			BodyType:     "SUV",
-			Engine:       "1.5 dCi",
-			Gearbox:      "Automatic",
-			Doors:        "5",
-			Seats:        "5",
-			BodyColour:   "Blue",
-		},
-		{
-			ID:           "mock3",
-			Make:         "BMW",
-			Model:        "3 Series",
-			Year:         2021,
-			Price:        34995,
-			Mileage:      19000,
-			FuelType:     "Petrol",
-			Images:       []string{"https://images.unsplash.com/photo-1555215695-3004980ad54e?w=600&h=400&fit=crop"},
-			Registration: "21 BMW",
-			Owners:       "1 previous owner",
-			BodyType:     "Saloon",
-			Engine:       "2.0 TwinPower Turbo",
-			Gearbox:      "Automatic",
-			Doors:        "4",
-			Seats:        "5",
-			BodyColour:   "White",
-		},
-		{
-			ID:           "mock4",
-			Make:         "Ford",
-			Model:        "Focus",
-			Year:         2018,
-			Price:        12495,
-			Mileage:      45000,
-			FuelType:     "Petrol",
-			Images:       []string{"https://images.unsplash.com/photo-1610647752706-3bb12232b3ab?w=600&h=400&fit=crop"},
-			Registration: "68 FOR",
-			Owners:       "2 previous owners",
-			BodyType:     "Hatchback",
-			Engine:       "1.0 EcoBoost",
-			Gearbox:      "Manual",
-			Doors:        "5",
-			Seats:        "5",
-			BodyColour:   "Black",
-		},
-		{
-			ID:           "mock5",
-			Make:         "Audi",
-			Model:        "A4",
-			Year:         2020,
-			Price:        28950,
-			Mileage:      25000,
-			FuelType:     "Diesel",
-			Images:       []string{"https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=600&h=400&fit=crop"},
-			Registration: "70 AUD",
-			Owners:       "1 previous owner",
-			BodyType:     "Saloon",
-			Engine:       "2.0 TDI",
-			Gearbox:      "Automatic",
-			Doors:        "4",
-			Seats:        "5",
-			BodyColour:   "Grey",
+			ID:            "mock1",
+			Make:          "Volkswagen",
+			Model:         "Golf GTI",
+			Year:          2020,
+			Price:         18995,
+			Images:        []string{"https://images.unsplash.com/photo-1609521263047-f8f205293f24?w=600&h=400&fit=crop"},
+			OriginalURL:   "https://example.com/mock1",
+			Mileage:       "28,000 Miles",
+			Engine:        "1.4 TSI",
+			Gearbox:       "Manual",
+			ExteriorColor: "Silver",
+			InteriorColor: "Black",
+			Steering:      "Right-hand drive",
+			FuelType:      "Petrol",
+			KeyFacts:      []string{"Low mileage", "Full service history", "Great condition"},
 		},
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for i := range mockCars {
-		h.listings[mockCars[i].ID] = &mockCars[i]
+	for _, mockCar := range mockCars {
+		h.bonhamsListings[mockCar.ID] = mockCar
 	}
 }
 
@@ -458,11 +391,54 @@ func (h *Handler) startAutoRefresh() {
 	go func() {
 		for range h.refreshTicker.C {
 			fmt.Println("⏰ Auto-refresh triggered (12 hours elapsed)")
-			h.refreshListings()
+			// Run refresh in background to avoid blocking gameplay
+			go h.refreshListingsAsync()
 		}
 	}()
 
 	fmt.Println("🔄 Auto-refresh scheduled every 12 hours")
+}
+
+// refreshListingsAsync performs a non-blocking refresh that doesn't interrupt gameplay
+func (h *Handler) refreshListingsAsync() {
+	fmt.Println("🔄 Starting background refresh (non-blocking)...")
+
+	// Get fresh Bonhams data (this may take a few minutes) - increased from 50 to 100
+	bonhamsCars, err := h.scraper.GetBonhamsListings(ListingAmount)
+	if err != nil {
+		fmt.Printf("❌ Background refresh failed: %v\n", err)
+		return
+	}
+
+	if len(bonhamsCars) == 0 {
+		fmt.Println("❌ Background refresh returned no cars")
+		return
+	}
+
+	// Filter out listings with £700 price (indicates missing price data)
+	var validCars []*models.BonhamsCar
+	for _, car := range bonhamsCars {
+		if car.Price != 700 {
+			validCars = append(validCars, car)
+		}
+	}
+
+	// Quick atomic update - only lock briefly
+	h.mu.Lock()
+	oldCount := len(h.bonhamsListings)
+	h.bonhamsListings = make(map[string]*models.BonhamsCar)
+	for _, bonhamsCar := range validCars {
+		h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
+	}
+	h.mu.Unlock()
+
+	// Save to cache (this can take time, but doesn't block gameplay)
+	if err := cache.SaveToCache(validCars); err != nil {
+		fmt.Printf("⚠️ Failed to save cache during background refresh: %v\n", err)
+	}
+
+	fmt.Printf("✅ Background refresh complete: %d cars updated (was %d, filtered %d)\n",
+		len(validCars), oldCount, len(bonhamsCars)-len(validCars))
 }
 
 // StopAutoRefresh stops the automatic refresh ticker (useful for cleanup)
@@ -475,22 +451,22 @@ func (h *Handler) StopAutoRefresh() {
 
 // ManualRefresh godoc
 // @Summary Manually refresh car listings
-// @Description Triggers a manual refresh of car listings from Bonhams
+// @Description Triggers a non-blocking background refresh of car listings from Bonhams. Game continues normally during refresh.
 // @Tags admin
 // @Produce json
-// @Success 200 {object} map[string]interface{} "message and count"
-// @Failure 500 {object} map[string]string "error message"
+// @Success 200 {object} map[string]interface{} "message: refresh started, status: refreshing, note: game continues normally"
 // @Router /api/refresh-listings [post]
 func (h *Handler) ManualRefresh(c *gin.Context) {
 	fmt.Println("🔄 Manual refresh requested")
 
 	go func() {
-		h.refreshListings()
+		h.refreshListingsAsync()
 	}()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Manual refresh started in background",
+		"message": "Manual refresh started in background (non-blocking)",
 		"status":  "refreshing",
+		"note":    "Game will continue normally while refresh happens in background",
 	})
 }
 
@@ -506,13 +482,12 @@ func (h *Handler) GetCacheStatus(c *gin.Context) {
 	expired := cache.IsCacheExpired()
 
 	h.mu.RLock()
-	totalListings := len(h.listings)
 	bonhamsListings := len(h.bonhamsListings)
 	h.mu.RUnlock()
 
 	status := gin.H{
 		"cache_expired":    expired,
-		"total_listings":   totalListings,
+		"total_listings":   bonhamsListings,
 		"bonhams_listings": bonhamsListings,
 		"next_refresh_in":  "up to 12 hours",
 	}
@@ -525,6 +500,220 @@ func (h *Handler) GetCacheStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, status)
+}
+
+// StartChallenge godoc
+// @Summary Start a new Challenge Mode session
+// @Description Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy.
+// @Tags challenge
+// @Produce json
+// @Success 200 {object} models.ChallengeSession "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0"
+// @Failure 404 {object} map[string]string "error: Not enough cars available for challenge mode"
+// @Router /api/challenge/start [post]
+func (h *Handler) StartChallenge(c *gin.Context) {
+	h.mu.RLock()
+
+	// Need at least 10 cars for a challenge
+	if len(h.bonhamsListings) < 10 {
+		h.mu.RUnlock()
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not enough cars available for challenge mode"})
+		return
+	}
+
+	// Select 10 random cars
+	var allCars []*models.BonhamsCar
+	for _, car := range h.bonhamsListings {
+		allCars = append(allCars, car)
+	}
+	h.mu.RUnlock() // Release read lock before processing
+
+	// Shuffle and select 10
+	rand.Shuffle(len(allCars), func(i, j int) {
+		allCars[i], allCars[j] = allCars[j], allCars[i]
+	})
+
+	selectedCars := make([]*models.EnhancedCar, 10)
+	for i := 0; i < 10; i++ {
+		enhancedCar := allCars[i].ToEnhancedCar()
+		enhancedCar.Price = 0 // Hide price for guessing
+		selectedCars[i] = enhancedCar
+	}
+
+	// Create challenge session
+	sessionID := generateSessionID()
+	session := &models.ChallengeSession{
+		SessionID:  sessionID,
+		Cars:       selectedCars,
+		CurrentCar: 0,
+		Guesses:    make([]models.ChallengeGuess, 0),
+		TotalScore: 0,
+		IsComplete: false,
+		StartTime:  time.Now().Format(time.RFC3339),
+	}
+
+	h.mu.Lock()
+	h.challengeSessions[sessionID] = session
+	h.mu.Unlock()
+
+	c.JSON(http.StatusOK, session)
+}
+
+// GetChallengeSession godoc
+// @Summary Get current challenge session
+// @Description Returns the current state of a challenge session
+// @Tags challenge
+// @Produce json
+// @Param sessionId path string true "Session ID"
+// @Success 200 {object} models.ChallengeSession
+// @Failure 404 {object} map[string]string "error: Session not found"
+// @Router /api/challenge/{sessionId} [get]
+func (h *Handler) GetChallengeSession(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+
+	h.mu.RLock()
+	session, exists := h.challengeSessions[sessionID]
+	h.mu.RUnlock()
+
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, session)
+}
+
+// SubmitChallengeGuess godoc
+// @Summary Submit a guess for challenge mode
+// @Description Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points).
+// @Tags challenge
+// @Accept json
+// @Produce json
+// @Param sessionId path string true "Challenge Session ID"
+// @Param guess body models.ChallengeGuessRequest true "Price guess (guessedPrice only)"
+// @Success 200 {object} models.ChallengeResponse "points earned, totalScore, isLastCar, message, originalUrl"
+// @Failure 400 {object} map[string]string "error: Invalid request or session complete"
+// @Failure 404 {object} map[string]string "error: Session not found"
+// @Router /api/challenge/{sessionId}/guess [post]
+func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+
+	var req models.ChallengeGuessRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.mu.Lock()
+	session, exists := h.challengeSessions[sessionID]
+	if !exists {
+		h.mu.Unlock()
+		c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
+		return
+	}
+
+	if session.IsComplete {
+		h.mu.Unlock()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Challenge session is already complete"})
+		return
+	}
+
+	if session.CurrentCar >= len(session.Cars) {
+		h.mu.Unlock()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No more cars in this challenge"})
+		return
+	}
+
+	// Get the current car and its original price
+	currentCar := session.Cars[session.CurrentCar]
+	var actualPrice float64
+	var originalURL string
+
+	// Find the original car with the actual price
+	for _, bonhamsCar := range h.bonhamsListings {
+		if bonhamsCar.ID == currentCar.ID {
+			actualPrice = bonhamsCar.Price
+			originalURL = bonhamsCar.OriginalURL
+			break
+		}
+	}
+
+	if actualPrice == 0 {
+		h.mu.Unlock()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not find actual price for this car"})
+		return
+	}
+
+	// Calculate difference and percentage
+	difference := math.Abs(actualPrice - req.GuessedPrice)
+	percentage := (difference / actualPrice) * 100
+
+	// Calculate points using Geoguessr-like scoring
+	points := h.calculateChallengePoints(percentage)
+
+	// Create guess record
+	guess := models.ChallengeGuess{
+		CarID:        currentCar.ID,
+		GuessedPrice: req.GuessedPrice,
+		ActualPrice:  actualPrice,
+		Difference:   difference,
+		Percentage:   percentage,
+		Points:       points,
+	}
+
+	// Add to session
+	session.Guesses = append(session.Guesses, guess)
+	session.TotalScore += points
+	session.CurrentCar++
+
+	// Check if challenge is complete
+	isLastCar := session.CurrentCar >= len(session.Cars)
+	if isLastCar {
+		session.IsComplete = true
+		session.CompletedTime = time.Now().Format(time.RFC3339)
+	}
+
+	h.mu.Unlock()
+
+	// Create response
+	response := models.ChallengeResponse{
+		ChallengeGuess:  guess,
+		IsLastCar:       isLastCar,
+		TotalScore:      session.TotalScore,
+		SessionComplete: session.IsComplete,
+		OriginalURL:     originalURL,
+	}
+
+	if !isLastCar {
+		response.NextCarNumber = session.CurrentCar + 1
+		response.Message = fmt.Sprintf("Car %d/10 - %d points! Moving to next car...", session.CurrentCar, points)
+	} else {
+		response.Message = fmt.Sprintf("Challenge Complete! Final Score: %d points", session.TotalScore)
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// calculateChallengePoints calculates points based on guess accuracy (Geoguessr-style)
+func (h *Handler) calculateChallengePoints(percentage float64) int {
+	// Points scale: 5000 max points for perfect guess, decreasing with error percentage
+	// Perfect guess (0% error): 5000 points
+	// 1% error: ~4950 points
+	// 5% error: ~4750 points
+	// 10% error: ~4500 points
+	// 25% error: ~3750 points
+	// 50% error: ~2500 points
+	// 100% error or more: 0 points
+
+	if percentage >= 100 {
+		return 0
+	}
+
+	// Use exponential decay for scoring
+	// Points = 5000 * e^(-percentage/20)
+	points := 5000 * math.Exp(-percentage/20)
+
+	// Round to nearest integer
+	return int(math.Round(points))
 }
 
 func generateSessionID() string {

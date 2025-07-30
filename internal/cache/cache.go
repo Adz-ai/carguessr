@@ -16,7 +16,7 @@ type ListingCache struct {
 
 const (
 	CacheFileName = "listings_cache.json"
-	CacheExpiry   = 12 * time.Hour
+	CacheExpiry   = 24 * time.Hour
 )
 
 // LoadFromCache loads cached listings if they exist and are not expired

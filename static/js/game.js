@@ -3,7 +3,9 @@ let currentGame = {
     mode: null,
     currentListing: null,
     score: 0,
-    sessionId: generateSessionId()
+    sessionId: generateSessionId(),
+    challengeSession: null,
+    challengeGuesses: []
 };
 
 // Generate a session ID for tracking scores
@@ -25,15 +27,22 @@ function startGame(mode) {
     const scoreLabel = document.getElementById('scoreLabel');
     if (mode === 'zero') {
         scoreLabel.textContent = 'Total Difference: £';
-    } else {
+    } else if (mode === 'streak') {
         scoreLabel.textContent = 'Streak: ';
+    } else if (mode === 'challenge') {
+        scoreLabel.textContent = 'Score: ';
     }
     
     // Load data source info
     loadDataSourceInfo();
     
-    // Load first car
-    loadNextCar();
+    // Handle challenge mode differently
+    if (mode === 'challenge') {
+        startChallengeMode();
+    } else {
+        // Load first car for other modes
+        loadNextCar();
+    }
 }
 
 // Load a random car listing
@@ -258,6 +267,12 @@ async function submitGuess() {
         return;
     }
     
+    // Handle challenge mode differently
+    if (currentGame.mode === 'challenge') {
+        await submitChallengeGuess(guessValue);
+        return;
+    }
+    
     // Add loading state
     submitButton.innerHTML = '<span class="loading"></span>';
     submitButton.disabled = true;
@@ -338,7 +353,20 @@ function displayResult(result) {
 // Next round
 function nextRound() {
     document.getElementById('resultModal').style.display = 'none';
-    loadNextCar();
+    
+    if (currentGame.mode === 'challenge') {
+        if (currentGame.challengeSession.currentCar >= currentGame.challengeSession.cars.length) {
+            // Challenge complete - show final results
+            displayChallengeResults();
+        } else {
+            // Load next challenge car
+            loadChallengeAuto();
+            updateChallengeProgress();
+        }
+    } else {
+        // Regular game modes
+        loadNextCar();
+    }
 }
 
 // End game
@@ -374,6 +402,194 @@ async function loadDataSourceInfo() {
     } catch (error) {
         console.error('Error loading data source info:', error);
     }
+}
+
+// Challenge Mode Functions
+async function startChallengeMode() {
+    try {
+        // Start a new challenge session
+        const response = await fetch('/api/challenge/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to start challenge');
+        
+        const challengeSession = await response.json();
+        currentGame.challengeSession = challengeSession;
+        currentGame.challengeGuesses = [];
+        
+        // Load first car
+        loadChallengeAuto();
+        
+        // Add challenge progress display
+        addChallengeProgress();
+        
+    } catch (error) {
+        console.error('Error starting challenge:', error);
+        alert('Failed to start challenge mode. Please try again.');
+        location.reload();
+    }
+}
+
+function addChallengeProgress() {
+    // Add challenge progress bar after car info
+    const carInfo = document.querySelector('.car-info');
+    const progressDiv = document.createElement('div');
+    progressDiv.className = 'challenge-progress';
+    progressDiv.id = 'challengeProgress';
+    
+    const session = currentGame.challengeSession;
+    const currentCarNum = session.currentCar + 1;
+    
+    progressDiv.innerHTML = `
+        <h4>Challenge Progress</h4>
+        <p>Car ${currentCarNum} of 10</p>
+        <div class="challenge-progress-bar">
+            <div class="challenge-progress-fill" style="width: ${(currentCarNum - 1) / 10 * 100}%"></div>
+        </div>
+        <p>Current Score: <span id="challengeCurrentScore">${session.totalScore}</span> points</p>
+    `;
+    
+    carInfo.appendChild(progressDiv);
+}
+
+function updateChallengeProgress() {
+    const session = currentGame.challengeSession;
+    const currentCarNum = session.currentCar + 1;
+    const progressDiv = document.getElementById('challengeProgress');
+    
+    if (progressDiv) {
+        progressDiv.innerHTML = `
+            <h4>Challenge Progress</h4>
+            <p>Car ${currentCarNum} of 10</p>
+            <div class="challenge-progress-bar">
+                <div class="challenge-progress-fill" style="width: ${(currentCarNum - 1) / 10 * 100}%"></div>
+            </div>
+            <p>Current Score: <span id="challengeCurrentScore">${session.totalScore}</span> points</p>
+        `;
+    }
+}
+
+function loadChallengeAuto() {
+    const session = currentGame.challengeSession;
+    if (session.currentCar >= session.cars.length) {
+        return;
+    }
+    
+    const currentCar = session.cars[session.currentCar];
+    currentGame.currentListing = currentCar;
+    displayCar(currentCar);
+    
+    // Reset guess inputs
+    document.getElementById('priceGuess').value = '';
+    document.getElementById('priceSlider').value = 50000;
+}
+
+async function submitChallengeGuess(guessValue) {
+    const submitButton = document.querySelector('.submit-button');
+    submitButton.innerHTML = '<span class="loading"></span>';
+    submitButton.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/challenge/${currentGame.challengeSession.sessionId}/guess`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                guessedPrice: guessValue
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to submit challenge guess');
+        
+        const result = await response.json();
+        currentGame.challengeGuesses.push(result);
+        
+        // Update challenge session
+        currentGame.challengeSession.currentCar++;
+        currentGame.challengeSession.totalScore = result.totalScore;
+        currentGame.challengeSession.guesses.push(result);
+        
+        // Update score display
+        document.getElementById('scoreValue').textContent = result.totalScore;
+        
+        if (result.sessionComplete) {
+            // Show challenge complete modal
+            displayChallengeResults();
+        } else {
+            // Show result and move to next car
+            displayChallengeResult(result);
+        }
+        
+    } catch (error) {
+        console.error('Error submitting challenge guess:', error);
+        alert('Failed to submit guess. Please try again.');
+    } finally {
+        submitButton.innerHTML = 'Submit Guess';
+        submitButton.disabled = false;
+    }
+}
+
+function displayChallengeResult(result) {
+    // Update result modal content for challenge mode
+    document.getElementById('resultTitle').textContent = `Car ${currentGame.challengeSession.currentCar}/10 Complete!`;
+    document.getElementById('actualPrice').textContent = '£' + result.actualPrice.toLocaleString();
+    document.getElementById('yourGuess').textContent = '£' + result.guessedPrice.toLocaleString();
+    document.getElementById('priceDifference').textContent = '£' + result.difference.toLocaleString();
+    document.getElementById('accuracy').textContent = (100 - result.percentage).toFixed(1) + '% accurate';
+    document.getElementById('resultMessage').innerHTML = `
+        <strong>${result.points} points!</strong><br>
+        ${result.message}
+    `;
+    
+    // Show original listing link
+    const originalLinkDiv = document.getElementById('originalLink');
+    if (result.originalUrl) {
+        originalLinkDiv.style.display = 'block';
+        originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">View Original Auction Listing on Bonhams</a>`;
+    } else {
+        originalLinkDiv.style.display = 'none';
+    }
+    
+    // Show modal with modified buttons
+    const nextButton = document.querySelector('.next-button');
+    nextButton.textContent = result.isLastCar ? 'View Results' : 'Next Car';
+    
+    document.getElementById('resultModal').style.display = 'flex';
+}
+
+function displayChallengeResults() {
+    const session = currentGame.challengeSession;
+    
+    // Set final score
+    document.getElementById('challengeFinalScore').textContent = `Final Score: ${session.totalScore.toLocaleString()} points`;
+    
+    // Build results breakdown
+    const resultsDiv = document.getElementById('challengeResults');
+    resultsDiv.innerHTML = '';
+    
+    session.guesses.forEach((guess, index) => {
+        const car = session.cars[index];
+        const resultItem = document.createElement('div');
+        resultItem.className = 'challenge-result-item';
+        
+        const accuracy = (100 - guess.percentage).toFixed(1);
+        
+        resultItem.innerHTML = `
+            <div class="challenge-result-car">${car.year} ${car.make} ${car.model}</div>
+            <div class="challenge-result-accuracy">${accuracy}% accurate</div>
+            <div class="challenge-result-points">${guess.points} pts</div>
+        `;
+        
+        resultsDiv.appendChild(resultItem);
+    });
+    
+    // Show challenge complete modal
+    document.getElementById('challengeCompleteModal').style.display = 'flex';
 }
 
 // Initialize the app

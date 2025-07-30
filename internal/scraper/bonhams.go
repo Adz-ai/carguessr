@@ -56,10 +56,17 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 	var allFoundLinks []string
 
 	// Calculate how many pages we need (18 listings per page)
+	// Since we're filtering for SOLD only at the listing level, we need more pages
 	listingsPerPage := 18
 	pagesNeeded := (maxListings + listingsPerPage - 1) / listingsPerPage // Round up
 
-	fmt.Printf("🔍 Attempting to scrape %d listings across %d pages\n", maxListings, pagesNeeded)
+	// Add extra pages since many cars will be filtered out (didn't meet reserve)
+	pagesNeeded = pagesNeeded * 3 // Triple the pages to account for filtering
+	if pagesNeeded > 15 {
+		pagesNeeded = 15 // Cap at 15 pages to be reasonable
+	}
+
+	fmt.Printf("🔍 Attempting to scrape %d sold listings across %d pages\n", maxListings, pagesNeeded)
 
 	// Scrape multiple pages
 	for pageNum := 1; pageNum <= pagesNeeded && len(allFoundLinks) < maxListings; pageNum++ {
@@ -97,6 +104,26 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 				if err == nil && href != nil && *href != "" {
 					// Only add links that look like car listings
 					if strings.Contains(*href, "/listings/") && !strings.Contains(*href, "#") {
+						// Check if this is a sold item by examining the card content
+						cardText, _ := element.Text()
+						cardTextLower := strings.ToLower(cardText)
+
+						// Skip items that show "Bid to" as these didn't meet reserve
+						if strings.Contains(cardTextLower, "bid to") {
+							fmt.Printf("Skipping unsold item (bid to): %s\n", *href)
+							continue
+						}
+
+						// Look for indicators that the item sold
+						isSold := strings.Contains(cardTextLower, "sold for") ||
+							strings.Contains(cardTextLower, "hammer price") ||
+							(strings.Contains(cardTextLower, "sold") && !strings.Contains(cardTextLower, "bid to"))
+
+						if !isSold {
+							fmt.Printf("Skipping item (no sold indicator): %s\n", *href)
+							continue
+						}
+
 						fullURL := *href
 						if !strings.HasPrefix(fullURL, "http") {
 							fullURL = "https://carsonline.bonhams.com" + fullURL
@@ -113,6 +140,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 
 						if !isDuplicate {
 							pageFoundLinks = append(pageFoundLinks, fullURL)
+							fmt.Printf("✅ Added sold item: %s\n", fullURL)
 						}
 					}
 				}
@@ -192,17 +220,17 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		allFoundLinks = allFoundLinks[:maxListings]
 	}
 
-	// Scrape each detail page
+	// Scrape each detail page (already filtered for sold items)
 	for i, detailURL := range allFoundLinks {
-		fmt.Printf("Scraping car %d/%d: %s\n", i+1, len(allFoundLinks), detailURL)
+		fmt.Printf("Scraping sold car %d/%d: %s\n", i+1, len(allFoundLinks), detailURL)
 
 		car := s.scrapeDetailPage(detailURL)
 		if car != nil && car.Price > 0 {
 			cars = append(cars, car)
-			fmt.Printf("✓ Scraped: %s %s (£%.0f, %s)\n",
-				car.Make, car.Model, car.Price, car.Mileage)
+			fmt.Printf("✅ Sold car added: %s %s %d (£%.0f, %s)\n",
+				car.Make, car.Model, car.Year, car.Price, car.Mileage)
 		} else {
-			fmt.Printf("✗ Failed to scrape car details from: %s\n", detailURL)
+			fmt.Printf("❌ Failed to scrape car details: %s\n", detailURL)
 		}
 
 		// Add delay between requests to be respectful
@@ -212,9 +240,10 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 	}
 
 	if len(cars) == 0 {
-		return nil, fmt.Errorf("no cars could be scraped from Bonhams")
+		return nil, fmt.Errorf("no sold cars could be found from Bonhams")
 	}
 
+	fmt.Printf("🎉 Successfully scraped %d sold cars from Bonhams\n", len(cars))
 	return cars, nil
 }
 
@@ -268,9 +297,11 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		}
 	}
 
-	// 2. Extract price (sold price or estimate)
-	fmt.Println("Extracting price...")
+	// 2. Extract price AND sale status (must be SOLD, not just bid)
+	fmt.Println("Extracting price and sale status...")
 	priceResult, err := page.Eval(`() => {
+		const result = { price: '', status: '', fullText: '' };
+		
 		const priceSelectors = [
 			'.price',
 			'.sold-price',
@@ -278,28 +309,79 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 			'.estimate',
 			'*[class*="price"]',
 			'*[class*="sold"]',
-			'*[class*="hammer"]'
+			'*[class*="hammer"]',
+			'*[data-qa*="price"]',
+			'*[data-qa*="sold"]'
 		];
 		
+		// Look for price and status information
 		for (let selector of priceSelectors) {
 			const elements = document.querySelectorAll(selector);
 			for (let el of elements) {
-				const text = el.textContent || '';
-				if (text.includes('£') && (text.includes('sold') || text.includes('hammer') || text.match(/£\s*[\d,]+/))) {
-					return text;
+				const text = (el.textContent || '').toLowerCase();
+				const originalText = el.textContent || '';
+				
+				// Check if this element contains price information
+				if (text.includes('£') && text.match(/£\s*[\d,]+/)) {
+					result.fullText = originalText;
+					
+					// Extract the price
+					const priceMatch = originalText.match(/£\s*([\d,]+)/);
+					if (priceMatch) {
+						result.price = priceMatch[0];
+					}
+					
+					// Determine sale status - CRITICAL: only accept SOLD items
+					if (text.includes('sold') && !text.includes('bid to')) {
+						result.status = 'sold';
+						return JSON.stringify(result);
+					} else if (text.includes('bid to') || text.includes('bidding')) {
+						result.status = 'bid_to'; // Did not meet reserve
+						return JSON.stringify(result);
+					} else if (text.includes('hammer') && !text.includes('bid to')) {
+						result.status = 'sold'; // Hammer price usually means sold
+						return JSON.stringify(result);
+					}
 				}
 			}
 		}
 		
-		// Fallback: look for any element containing £ and numbers
+		// Broader search for sale status in the entire page
 		const allElements = document.querySelectorAll('*');
 		for (let el of allElements) {
-			const text = el.textContent || '';
-			if (text.includes('£') && text.match(/£\s*[\d,]+/) && text.length < 100) {
-				return text;
+			const text = (el.textContent || '').toLowerCase();
+			const originalText = el.textContent || '';
+			
+			// Look for explicit sale status
+			if (text.includes('sold for £') || 
+				text.includes('hammer price £') ||
+				(text.includes('sold') && text.includes('£') && text.match(/£\s*[\d,]+/))) {
+				
+				const priceMatch = originalText.match(/£\s*([\d,]+)/);
+				if (priceMatch) {
+					result.price = priceMatch[0];
+					result.fullText = originalText;
+					result.status = 'sold';
+					return JSON.stringify(result);
+				}
+			}
+			
+			// Check for "bid to" which means reserve not met
+			if (text.includes('bid to £') || 
+				text.includes('bidding to £') ||
+				(text.includes('bid to') && text.includes('£'))) {
+				
+				const priceMatch = originalText.match(/£\s*([\d,]+)/);
+				if (priceMatch) {
+					result.price = priceMatch[0];
+					result.fullText = originalText;
+					result.status = 'bid_to';
+					return JSON.stringify(result);
+				}
 			}
 		}
-		return '';
+		
+		return JSON.stringify(result);
 	}`)
 
 	if err == nil {

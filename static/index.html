@@ -7,6 +7,14 @@
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
+    <!-- Home Button -->
+    <button class="home-button" onclick="location.reload()" title="Home">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+    </button>
+    
     <div class="container">
         <!-- Header -->
         <header>
@@ -31,6 +39,11 @@
                     <h3>Streak Mode</h3>
                     <p>Guess within 10% or game over!</p>
                     <p class="mode-description">Build your streak by guessing within 10% of the actual price. One wrong guess ends the game!</p>
+                </div>
+                <div class="mode-card" onclick="startGame('challenge')">
+                    <h3>Challenge Mode</h3>
+                    <p>10 cars, highest score wins!</p>
+                    <p class="mode-description">GeoGuessr-style scoring! Get up to 5000 points per car based on accuracy. Perfect guess = 5000 points!</p>
                 </div>
             </div>
         </div>
@@ -138,6 +151,21 @@
                 <p id="finalScore" class="final-score"></p>
                 <div class="modal-buttons">
                     <button onclick="location.reload()" class="play-again-button">Play Again</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Challenge Complete Modal -->
+        <div id="challengeCompleteModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>🏆 Challenge Complete!</h2>
+                <p id="challengeFinalScore" class="final-score"></p>
+                <div id="challengeBreakdown" class="challenge-breakdown">
+                    <h3>Score Breakdown:</h3>
+                    <div id="challengeResults" class="challenge-results"></div>
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="location.reload()" class="play-again-button">New Challenge</button>
                 </div>
             </div>
         </div>

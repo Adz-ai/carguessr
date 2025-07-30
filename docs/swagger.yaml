@@ -1,38 +1,141 @@
 basePath: /
 definitions:
-  models.Car:
+  models.ChallengeGuess:
     properties:
-      color:
+      actualPrice:
+        type: number
+      carId:
+        type: string
+      difference:
+        type: number
+      guessedPrice:
+        type: number
+      percentage:
+        type: number
+      points:
+        type: integer
+    type: object
+  models.ChallengeGuessRequest:
+    properties:
+      guessedPrice:
+        minimum: 0
+        type: number
+    required:
+    - guessedPrice
+    type: object
+  models.ChallengeResponse:
+    properties:
+      actualPrice:
+        type: number
+      carId:
+        type: string
+      difference:
+        type: number
+      guessedPrice:
+        type: number
+      isLastCar:
+        type: boolean
+      message:
+        type: string
+      nextCarNumber:
+        type: integer
+      originalUrl:
+        type: string
+      percentage:
+        type: number
+      points:
+        type: integer
+      sessionComplete:
+        type: boolean
+      totalScore:
+        type: integer
+    type: object
+  models.ChallengeSession:
+    properties:
+      cars:
+        items:
+          $ref: '#/definitions/models.EnhancedCar'
+        type: array
+      completedTime:
+        type: string
+      currentCar:
+        type: integer
+      guesses:
+        items:
+          $ref: '#/definitions/models.ChallengeGuess'
+        type: array
+      isComplete:
+        type: boolean
+      sessionId:
+        type: string
+      startTime:
+        type: string
+      totalScore:
+        type: integer
+    type: object
+  models.EnhancedCar:
+    properties:
+      auctionDetails:
+        description: Flag indicating this is auction data
+        type: boolean
+      bodyColour:
+        type: string
+      bodyType:
         type: string
       description:
+        description: Combined description
         type: string
-      features:
-        items:
-          type: string
-        type: array
+      doors:
+        type: string
+      emissionClass:
+        type: string
+      engine:
+        type: string
+      exteriorColor:
+        description: More detailed color
+        type: string
       fuelType:
         type: string
+      gearbox:
+        type: string
       id:
+        description: Standard Car fields
         type: string
       images:
         items:
           type: string
         type: array
-      location:
+      interiorColor:
+        description: Interior details
         type: string
+      keyFacts:
+        description: Auction key facts
+        items:
+          type: string
+        type: array
       make:
         type: string
       mileage:
+        description: Standard overview fields
         type: integer
+      mileageFormatted:
+        description: Enhanced Bonhams fields
+        type: string
       model:
         type: string
       originalUrl:
         type: string
-      price:
-        type: number
-      transmission:
+      owners:
         type: string
-      vin:
+      price:
+        description: Will be 0 for guessing
+        type: number
+      registration:
+        type: string
+      seats:
+        type: string
+      steering:
+        description: '"Right-hand drive"'
         type: string
       year:
         type: integer
@@ -88,12 +191,118 @@ definitions:
     type: object
 host: localhost:8080
 info:
-  contact: {}
-  description: A fun game API where players guess car prices from real AutoTrader
-    UK listings
-  title: AutoTrader Price Guesser API
-  version: "1.0"
+  contact:
+    name: Motors Price Guesser Support
+    url: https://github.com/your-repo/motors-price-guesser/issues
+  description: A fun car price guessing game with multiple game modes using real Bonhams
+    Car Auction data
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://github.com/your-repo/motors-price-guesser
+  title: Motors Price Guesser API
+  version: "2.0"
 paths:
+  /api/cache-status:
+    get:
+      description: Returns information about the current cache status and age
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: cache status information
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get cache status information
+      tags:
+      - debug
+  /api/challenge/{sessionId}:
+    get:
+      description: Returns the current state of a challenge session
+      parameters:
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ChallengeSession'
+        "404":
+          description: 'error: Session not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get current challenge session
+      tags:
+      - challenge
+  /api/challenge/{sessionId}/guess:
+    post:
+      consumes:
+      - application/json
+      description: Submit a price guess for the current car in challenge mode. Returns
+        points based on accuracy (max 5000 points).
+      parameters:
+      - description: Challenge Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: Price guess (guessedPrice only)
+        in: body
+        name: guess
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChallengeGuessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: points earned, totalScore, isLastCar, message, originalUrl
+          schema:
+            $ref: '#/definitions/models.ChallengeResponse'
+        "400":
+          description: 'error: Invalid request or session complete'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: 'error: Session not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a guess for challenge mode
+      tags:
+      - challenge
+  /api/challenge/start:
+    post:
+      description: Starts a new 10-car challenge session with GeoGuessr-style scoring.
+        Players get up to 5000 points per car based on guess accuracy.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'sessionId, cars array (10 cars with prices hidden), currentCar:
+            0, totalScore: 0'
+          schema:
+            $ref: '#/definitions/models.ChallengeSession'
+        "404":
+          description: 'error: Not enough cars available for challenge mode'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start a new Challenge Mode session
+      tags:
+      - challenge
   /api/check-guess:
     post:
       consumes:
@@ -131,13 +340,14 @@ paths:
       - game
   /api/data-source:
     get:
-      description: Returns information about the current data source being used for
-        car listings
+      description: Returns information about the data source (Bonhams Car Auctions)
+        including total listings count
       produces:
       - application/json
       responses:
         "200":
-          description: data_source, total_listings, and description
+          description: 'data_source: bonhams_auctions, total_listings: count, description:
+            Real Bonhams Car Auction results'
           schema:
             additionalProperties: true
             type: object
@@ -179,6 +389,26 @@ paths:
       summary: Get all available car listings
       tags:
       - listings
+  /api/random-enhanced-listing:
+    get:
+      description: Returns a random car listing with full auction details and characteristics,
+        price hidden for guessing
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.EnhancedCar'
+        "404":
+          description: 'error: No listings available'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a random car listing with all Bonhams characteristics
+      tags:
+      - game
   /api/random-listing:
     get:
       description: Returns a random car listing with the price hidden (set to 0) for
@@ -189,7 +419,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Car'
+            $ref: '#/definitions/models.EnhancedCar'
         "404":
           description: 'error: No listings available'
           schema:
@@ -199,6 +429,22 @@ paths:
       summary: Get a random car listing for the game
       tags:
       - game
+  /api/refresh-listings:
+    post:
+      description: Triggers a non-blocking background refresh of car listings from
+        Bonhams. Game continues normally during refresh.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: refresh started, status: refreshing, note: game continues
+            normally'
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Manually refresh car listings
+      tags:
+      - admin
   /api/test-scraper:
     get:
       description: Tests the AutoTrader scraper and returns up to 10 cars with full
@@ -220,4 +466,18 @@ paths:
       summary: Test the car scraper directly
       tags:
       - debug
+schemes:
+- http
+- https
 swagger: "2.0"
+tags:
+- description: Core game endpoints for different game modes
+  name: game
+- description: Challenge Mode - GeoGuessr style scoring with 10 cars
+  name: challenge
+- description: Car listing management and data access
+  name: listings
+- description: Administrative functions for cache and refresh
+  name: admin
+- description: Debug and monitoring endpoints
+  name: debug

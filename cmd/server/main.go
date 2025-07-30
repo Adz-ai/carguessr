@@ -1,9 +1,29 @@
-// AutoTrader Price Guesser Game API
-// @title AutoTrader Price Guesser API
-// @version 1.0
-// @description A fun game API where players guess car prices from real AutoTrader UK listings
+// Motors Price Guesser Game API
+// @title Motors Price Guesser API
+// @version 2.0
+// @description A fun car price guessing game with multiple game modes using real Bonhams Car Auction data
+// @termsOfService https://github.com/your-repo/motors-price-guesser
+//
+// @contact.name Motors Price Guesser Support
+// @contact.url https://github.com/your-repo/motors-price-guesser/issues
+//
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+//
 // @host localhost:8080
 // @BasePath /
+// @schemes http https
+//
+// @tag.name game
+// @tag.description Core game endpoints for different game modes
+// @tag.name challenge
+// @tag.description Challenge Mode - GeoGuessr style scoring with 10 cars
+// @tag.name listings
+// @tag.description Car listing management and data access
+// @tag.name admin
+// @tag.description Administrative functions for cache and refresh
+// @tag.name debug
+// @tag.description Debug and monitoring endpoints
 
 package main
 
@@ -54,8 +74,11 @@ func main() {
 	// Initialize game handler
 	gameHandler := game.NewHandler()
 
-	// Swagger documentation
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Swagger documentation (only in development mode)
+	if gin.Mode() != gin.ReleaseMode {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		log.Println("📚 Swagger documentation available at /swagger/index.html")
+	}
 
 	// API routes
 	api := r.Group("/api")
@@ -69,6 +92,12 @@ func main() {
 		api.GET("/data-source", gameHandler.GetDataSource)
 		api.POST("/refresh-listings", gameHandler.ManualRefresh)
 		api.GET("/cache-status", gameHandler.GetCacheStatus)
+
+		// Challenge Mode routes
+		api.POST("/challenge/start", gameHandler.StartChallenge)
+		api.GET("/challenge/:sessionId", gameHandler.GetChallengeSession)
+		api.POST("/challenge/:sessionId/guess", gameHandler.SubmitChallengeGuess)
+
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})

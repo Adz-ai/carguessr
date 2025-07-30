@@ -142,6 +142,11 @@ type GuessRequest struct {
 	GameMode     string  `json:"gameMode" binding:"required,oneof=zero streak"`
 }
 
+// ChallengeGuessRequest represents a price guess in challenge mode
+type ChallengeGuessRequest struct {
+	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0"`
+}
+
 // GuessResponse represents the result of a guess
 type GuessResponse struct {
 	Correct      bool    `json:"correct"`
@@ -153,6 +158,39 @@ type GuessResponse struct {
 	GameOver     bool    `json:"gameOver"`
 	Message      string  `json:"message"`
 	OriginalURL  string  `json:"originalUrl,omitempty"`
+}
+
+// ChallengeSession represents a 10-car challenge game session
+type ChallengeSession struct {
+	SessionID     string           `json:"sessionId"`
+	Cars          []*EnhancedCar   `json:"cars"`
+	CurrentCar    int              `json:"currentCar"`
+	Guesses       []ChallengeGuess `json:"guesses"`
+	TotalScore    int              `json:"totalScore"`
+	IsComplete    bool             `json:"isComplete"`
+	StartTime     string           `json:"startTime"`
+	CompletedTime string           `json:"completedTime,omitempty"`
+}
+
+// ChallengeGuess represents a single guess in challenge mode
+type ChallengeGuess struct {
+	CarID        string  `json:"carId"`
+	GuessedPrice float64 `json:"guessedPrice"`
+	ActualPrice  float64 `json:"actualPrice"`
+	Difference   float64 `json:"difference"`
+	Percentage   float64 `json:"percentage"`
+	Points       int     `json:"points"`
+}
+
+// ChallengeResponse represents the response after submitting a challenge guess
+type ChallengeResponse struct {
+	ChallengeGuess
+	IsLastCar       bool   `json:"isLastCar"`
+	NextCarNumber   int    `json:"nextCarNumber,omitempty"`
+	TotalScore      int    `json:"totalScore"`
+	SessionComplete bool   `json:"sessionComplete"`
+	Message         string `json:"message"`
+	OriginalURL     string `json:"originalUrl,omitempty"`
 }
 
 // LeaderboardEntry represents a high score entry
