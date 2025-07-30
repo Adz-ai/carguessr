@@ -1,0 +1,15 @@
+2025/07/30 23:54:14 Server starting on port 8080
+2025/07/30 23:54:24 Request: GET / from 149.34.161.19
+[GIN] 2025/07/30 - 23:54:24 | 304 |      116.46µs |   149.34.161.19 | GET      "/"
+2025/07/30 23:54:24 Request: GET /api/data-source from 149.34.161.19
+[GIN] 2025/07/30 - 23:54:24 | 200 |      52.729µs |   149.34.161.19 | GET      "/api/data-source"
+2025/07/30 23:54:26 Request: GET /api/data-source from 149.34.161.19
+[GIN] 2025/07/30 - 23:54:26 | 200 |       69.58µs |   149.34.161.19 | GET      "/api/data-source"
+2025/07/30 23:54:26 Request: GET /api/random-enhanced-listing from 149.34.161.19
+[GIN] 2025/07/30 - 23:54:26 | 200 |     164.278µs |   149.34.161.19 | GET      "/api/random-enhanced-listing"
+2025/07/30 23:54:37 Request: POST /api/check-guess from 149.34.161.19
+2025/07/30 23:54:37 CheckGuess: Failed to parse JSON - Key: 'GuessRequest.GameMode' Error:Field validation for 'GameMode' failed on the 'oneof' tag
+2025/07/30 23:54:37 CheckGuess: Headers: map[Accept:[*/*] Accept-Encoding:[gzip, br] Accept-Language:[en-GB,en;q=0.7] Cdn-Loop:[cloudflare; loops=1] Cf-Connecting-Ip:[149.34.161.19] Cf-Ipcountry:[GB] Cf-Ray:[9678705d196ad577-LHR] Cf-Visitor:[{"scheme":"https"}] Cf-Warp-Tag-Id:[2e7d9a00-b5cf-4575-9a56-0c6f8049149a] Connection:[keep-alive] Content-Length:[87] Content-Type:[application/json] Cookie:[cf_clearance=4sm3EEw4dBjvSwDO71jbYVwVjUlnU.AnnOinE5Q2cmI-1753916064-1.2.1.1-L5CKUreyYRH.IhuFgQIyFWR6uwTixngSOeUlfhFV073BV5PIFL2GK0czdf9ZqCGOyASiWBp3grvxsdOKr6b5dHsK6n3v_21ea.VcitdIv.pZ1PeuRKJxaUE6OkvWznUIORKy6fyk4eTNS3E3soQorFlA__84w_0hFuLvt.ZiIhPwIb4XOAu1gEMgtrnI9Fvs7a0luHtHSzpTGpuf8DBYnZx3E6siwTyae8JMiq1qkAI] Origin:[https://carguessr.uk] Priority:[u=1, i] Referer:[https://carguessr.uk/] Sec-Ch-Ua:["Not)A;Brand";v="8", "Chromium";v="138", "Brave";v="138"] Sec-Ch-Ua-Mobile:[?0] Sec-Ch-Ua-Platform:["macOS"] Sec-Fetch-Dest:[empty] Sec-Fetch-Mode:[cors] Sec-Fetch-Site:[same-origin] Sec-Gpc:[1] User-Agent:[Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36] X-Forwarded-For:[149.34.161.19] X-Forwarded-Proto:[https] X-Session-Id:[rt64wpfs1]]
+[GIN] 2025/07/30 - 23:54:37 | 400 |    1.902447ms |   149.34.161.19 | POST     "/api/check-guess"
+^Csignal: interrupt
+make: *** [Makefile:40: prod] Interrupt
