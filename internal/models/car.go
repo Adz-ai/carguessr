@@ -139,7 +139,7 @@ type EnhancedCar struct {
 type GuessRequest struct {
 	ListingID    string  `json:"listingId" binding:"required"`
 	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0"`
-	GameMode     string  `json:"gameMode" binding:"required,oneof=zero streak"`
+	GameMode     string  `json:"gameMode" binding:"required,oneof=zero streak challenge"`
 }
 
 // ChallengeGuessRequest represents a price guess in challenge mode

@@ -1,7 +1,9 @@
 package game
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -123,6 +125,13 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 // @Failure 404 {object} map[string]string "error: Listing not found"
 // @Router /api/check-guess [post]
 func (h *Handler) CheckGuess(c *gin.Context) {
+	// Read the raw body for debugging
+	bodyBytes, _ := c.GetRawData()
+	log.Printf("CheckGuess: Raw request body: %s", string(bodyBytes))
+
+	// Restore the body so it can be read again
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	var req models.GuessRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("CheckGuess: Failed to parse JSON - %v", err)
