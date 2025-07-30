@@ -386,17 +386,17 @@ func (h *Handler) refreshListings() {
 // startAutoRefresh starts a background goroutine that refreshes listings every 12 hours
 func (h *Handler) startAutoRefresh() {
 	// Create ticker for 12-hour intervals
-	h.refreshTicker = time.NewTicker(12 * time.Hour)
+	h.refreshTicker = time.NewTicker(24 * time.Hour)
 
 	go func() {
 		for range h.refreshTicker.C {
-			fmt.Println("⏰ Auto-refresh triggered (12 hours elapsed)")
+			fmt.Println("⏰ Auto-refresh triggered (24 hours elapsed)")
 			// Run refresh in background to avoid blocking gameplay
 			go h.refreshListingsAsync()
 		}
 	}()
 
-	fmt.Println("🔄 Auto-refresh scheduled every 12 hours")
+	fmt.Println("🔄 Auto-refresh scheduled every 24 hours")
 }
 
 // refreshListingsAsync performs a non-blocking refresh that doesn't interrupt gameplay
