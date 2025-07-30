@@ -31,6 +31,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -76,7 +77,16 @@ func main() {
 		c.Next()
 	})
 
-	// Serve static files
+	// Serve static files with no-cache headers to prevent Cloudflare caching issues
+	r.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/static/") {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
+		}
+		c.Next()
+	})
+
 	r.Static("/static", "./static")
 	r.StaticFile("/", "./static/index.html")
 
