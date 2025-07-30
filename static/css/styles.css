@@ -680,3 +680,80 @@ header h1 {
         height: 55px;
     }
 }
+
+/* Auction Details Styling */
+.auction-details {
+    margin-top: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.auction-details h3 {
+    color: #28c878;
+    margin-bottom: 20px;
+    font-size: 1.4rem;
+    text-align: center;
+    border-bottom: 2px solid #28c878;
+    padding-bottom: 10px;
+}
+
+.key-facts h4,
+.description h4 {
+    color: #64b5f6;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+}
+
+.key-facts h4::before {
+    content: "✨";
+    margin-right: 8px;
+}
+
+.description h4::before {
+    content: "📝";
+    margin-right: 8px;
+}
+
+.key-facts-list {
+    list-style: none;
+    padding: 0;
+}
+
+.key-facts-list li {
+    background: rgba(40, 200, 120, 0.1);
+    margin: 8px 0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border-left: 4px solid #28c878;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.key-facts-list li:hover {
+    background: rgba(40, 200, 120, 0.2);
+    transform: translateX(5px);
+}
+
+.description-text {
+    background: rgba(100, 181, 246, 0.1);
+    padding: 16px;
+    border-radius: 8px;
+    border-left: 4px solid #64b5f6;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* Enhanced detail rows for auction cars */
+.detail-row {
+    transition: all 0.3s ease;
+}
+
+.detail-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(3px);
+}

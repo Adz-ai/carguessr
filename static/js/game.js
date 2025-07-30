@@ -39,8 +39,13 @@ function startGame(mode) {
 // Load a random car listing
 async function loadNextCar() {
     try {
-        const response = await fetch('/api/random-listing');
-        if (!response.ok) throw new Error('Failed to load listing');
+        // Try enhanced listing first, fallback to standard
+        let response = await fetch('/api/random-enhanced-listing');
+        if (!response.ok) {
+            console.log('Enhanced listing not available, falling back to standard');
+            response = await fetch('/api/random-listing');
+            if (!response.ok) throw new Error('Failed to load listing');
+        }
         
         const listing = await response.json();
         currentGame.currentListing = listing;
@@ -74,13 +79,58 @@ function displayCar(car) {
         const details = [
             { id: 'carYear', value: car.year || 'Unknown' },
             { id: 'carEngine', value: car.engine || 'Unknown' },
-            { id: 'carMileage', value: car.mileage ? car.mileage.toLocaleString() + ' miles' : 'Unknown' },
+            { id: 'carMileage', value: car.mileageFormatted || (car.mileage ? car.mileage.toLocaleString() + ' miles' : 'Unknown') },
             { id: 'carFuelType', value: car.fuelType || 'Unknown' },
             { id: 'carGearbox', value: car.gearbox || 'Unknown' },
-            { id: 'carBodyType', value: car.bodyType || 'Unknown' },
-            { id: 'carDoors', value: car.doors || 'Unknown' },
-            { id: 'carSeats', value: car.seats || 'Unknown' }
+            { id: 'carBodyColour', value: car.bodyColour || car.exteriorColor || 'Unknown' }
         ];
+
+        // Handle enhanced Bonhams characteristics
+        if (car.auctionDetails) {
+            // Show interior color if available
+            const interiorColorRow = document.getElementById('interiorColorRow');
+            const interiorColorElement = document.getElementById('carInteriorColor');
+            if (car.interiorColor) {
+                interiorColorElement.textContent = car.interiorColor;
+                interiorColorRow.style.display = 'flex';
+            } else {
+                interiorColorRow.style.display = 'none';
+            }
+
+            // Show steering if available
+            const steeringRow = document.getElementById('steeringRow');
+            const steeringElement = document.getElementById('carSteering');
+            if (car.steering) {
+                steeringElement.textContent = car.steering;
+                steeringRow.style.display = 'flex';
+            } else {
+                steeringRow.style.display = 'none';
+            }
+
+            // Show auction details section
+            const auctionDetailsSection = document.getElementById('auctionDetailsSection');
+            auctionDetailsSection.style.display = 'block';
+
+            // Display key facts
+            const keyFactsSection = document.getElementById('keyFactsSection');
+            const keyFactsList = document.getElementById('keyFactsList');
+            if (car.keyFacts && car.keyFacts.length > 0) {
+                keyFactsList.innerHTML = '';
+                car.keyFacts.forEach(fact => {
+                    const li = document.createElement('li');
+                    li.textContent = fact;
+                    keyFactsList.appendChild(li);
+                });
+                keyFactsSection.style.display = 'block';
+            } else {
+                keyFactsSection.style.display = 'none';
+            }
+        } else {
+            // Hide enhanced sections for standard cars
+            document.getElementById('interiorColorRow').style.display = 'none';
+            document.getElementById('steeringRow').style.display = 'none';
+            document.getElementById('auctionDetailsSection').style.display = 'none';
+        }
         
         details.forEach((detail, index) => {
             const element = document.getElementById(detail.id);
@@ -258,9 +308,17 @@ function displayResult(result) {
     
     // Show original listing link if available
     const originalLinkDiv = document.getElementById('originalLink');
-    if (result.originalUrl && result.originalUrl.includes('motors')) {
+    if (result.originalUrl) {
         originalLinkDiv.style.display = 'block';
-        originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">View Original Listing on Motors.co.uk</a>`;
+        let linkText = 'View Original Listing';
+        if (result.originalUrl.includes('motors')) {
+            linkText = 'View Original Listing on Motors.co.uk';
+        } else if (result.originalUrl.includes('collectingcars')) {
+            linkText = 'View Original Listing on Collecting Cars';
+        } else if (result.originalUrl.includes('bonhams')) {
+            linkText = 'View Original Auction Listing on Bonhams';
+        }
+        originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">${linkText}</a>`;
     } else {
         originalLinkDiv.style.display = 'none';
     }
@@ -309,6 +367,8 @@ async function loadDataSourceInfo() {
         else if (sourceName === 'autotrader') sourceName = 'AutoTrader';
         else if (sourceName === 'mixed') sourceName = 'CarWow + AutoTrader';
         else if (sourceName === 'uk_realistic') sourceName = 'UK Realistic Data';
+        else if (sourceName === 'bonhams_auctions') sourceName = 'Bonhams Car Auctions';
+        else if (sourceName === 'collecting_cars_live') sourceName = 'Collecting Cars';
         
         sourceInfo.textContent = `Data source: ${sourceName} (${data.total_listings} listings)`;
     } catch (error) {

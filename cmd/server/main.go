@@ -61,11 +61,14 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.GET("/random-listing", gameHandler.GetRandomListing)
+		api.GET("/random-enhanced-listing", gameHandler.GetRandomEnhancedListing)
 		api.POST("/check-guess", gameHandler.CheckGuess)
 		api.GET("/leaderboard", gameHandler.GetLeaderboard)
 		api.GET("/listings", gameHandler.GetAllListings)
 		api.GET("/test-scraper", gameHandler.TestScraper)
 		api.GET("/data-source", gameHandler.GetDataSource)
+		api.POST("/refresh-listings", gameHandler.ManualRefresh)
+		api.GET("/cache-status", gameHandler.GetCacheStatus)
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})

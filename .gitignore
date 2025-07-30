@@ -43,3 +43,6 @@ vendor/
 
 # Compiled templates
 *.qtpl.go
+
+# Cache files
+listings_cache.json

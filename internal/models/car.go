@@ -26,6 +26,115 @@ type Car struct {
 	// Placeholder for future fields
 }
 
+// BonhamsCar represents a comprehensive car model with all Bonhams auction data
+type BonhamsCar struct {
+	// Basic info
+	ID          string   `json:"id"`
+	Make        string   `json:"make"`
+	Model       string   `json:"model"`
+	Year        int      `json:"year"`
+	Price       float64  `json:"price"`
+	Images      []string `json:"images"`
+	OriginalURL string   `json:"originalUrl,omitempty"`
+
+	// Specifications from data-qa attributes
+	Mileage       string `json:"mileage,omitempty"`       // Keep as string to preserve formatting like "41,565 Miles"
+	Engine        string `json:"engine,omitempty"`        // e.g., "5999cc"
+	Gearbox       string `json:"gearbox,omitempty"`       // e.g., "semi", "manual", "automatic"
+	ExteriorColor string `json:"exteriorColor,omitempty"` // e.g., "Blue"
+	InteriorColor string `json:"interiorColor,omitempty"` // e.g., "Crema"
+	Steering      string `json:"steering,omitempty"`      // e.g., "Right-hand drive"
+	FuelType      string `json:"fuelType,omitempty"`      // e.g., "Petrol"
+
+	// Key facts (description points)
+	KeyFacts []string `json:"keyFacts,omitempty"`
+
+	// Additional extracted info
+	MileageNumeric int    `json:"mileageNumeric,omitempty"` // Numeric version for calculations
+	Description    string `json:"description,omitempty"`    // Combined description
+}
+
+// ToStandardCar converts BonhamsCar to the standard Car model for compatibility
+func (bc *BonhamsCar) ToStandardCar() *Car {
+	return &Car{
+		ID:          bc.ID,
+		Make:        bc.Make,
+		Model:       bc.Model,
+		Year:        bc.Year,
+		Price:       bc.Price,
+		Images:      bc.Images,
+		OriginalURL: bc.OriginalURL,
+		Mileage:     bc.MileageNumeric,
+		FuelType:    bc.FuelType,
+		Engine:      bc.Engine,
+		Gearbox:     bc.Gearbox,
+		BodyColour:  bc.ExteriorColor,
+	}
+}
+
+// ToEnhancedCar converts BonhamsCar to EnhancedCar with all characteristics
+func (bc *BonhamsCar) ToEnhancedCar() *EnhancedCar {
+	return &EnhancedCar{
+		// Standard fields
+		ID:          bc.ID,
+		Make:        bc.Make,
+		Model:       bc.Model,
+		Year:        bc.Year,
+		Price:       bc.Price,
+		Images:      bc.Images,
+		OriginalURL: bc.OriginalURL,
+
+		// Standard overview fields
+		Mileage:    bc.MileageNumeric,
+		FuelType:   bc.FuelType,
+		Engine:     bc.Engine,
+		Gearbox:    bc.Gearbox,
+		BodyColour: bc.ExteriorColor,
+
+		// Enhanced Bonhams fields
+		MileageFormatted: bc.Mileage,
+		ExteriorColor:    bc.ExteriorColor,
+		InteriorColor:    bc.InteriorColor,
+		Steering:         bc.Steering,
+		KeyFacts:         bc.KeyFacts,
+		AuctionDetails:   true,
+	}
+}
+
+// EnhancedCar represents a car with all Bonhams characteristics for the UI
+type EnhancedCar struct {
+	// Standard Car fields
+	ID          string   `json:"id"`
+	Make        string   `json:"make"`
+	Model       string   `json:"model"`
+	Year        int      `json:"year"`
+	Price       float64  `json:"price"` // Will be 0 for guessing
+	Images      []string `json:"images"`
+	OriginalURL string   `json:"originalUrl,omitempty"`
+
+	// Standard overview fields
+	Mileage       int    `json:"mileage"`
+	Registration  string `json:"registration,omitempty"`
+	Owners        string `json:"owners,omitempty"`
+	FuelType      string `json:"fuelType"`
+	BodyType      string `json:"bodyType,omitempty"`
+	Engine        string `json:"engine,omitempty"`
+	Gearbox       string `json:"gearbox,omitempty"`
+	Doors         string `json:"doors,omitempty"`
+	Seats         string `json:"seats,omitempty"`
+	BodyColour    string `json:"bodyColour,omitempty"`
+	EmissionClass string `json:"emissionClass,omitempty"`
+
+	// Enhanced Bonhams fields
+	MileageFormatted string   `json:"mileageFormatted,omitempty"` // "41,565 Miles"
+	ExteriorColor    string   `json:"exteriorColor,omitempty"`    // More detailed color
+	InteriorColor    string   `json:"interiorColor,omitempty"`    // Interior details
+	Steering         string   `json:"steering,omitempty"`         // "Right-hand drive"
+	KeyFacts         []string `json:"keyFacts,omitempty"`         // Auction key facts
+	Description      string   `json:"description,omitempty"`      // Combined description
+	AuctionDetails   bool     `json:"auctionDetails"`             // Flag indicating this is auction data
+}
+
 // GuessRequest represents a price guess from the user
 type GuessRequest struct {
 	ListingID    string  `json:"listingId" binding:"required"`

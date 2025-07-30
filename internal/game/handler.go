@@ -10,30 +10,37 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"autotraderguesser/internal/cache"
 	"autotraderguesser/internal/models"
 	"autotraderguesser/internal/scraper"
 )
 
 type Handler struct {
-	scraper      *scraper.Scraper
-	listings     map[string]*models.Car
-	leaderboard  []models.LeaderboardEntry
-	mu           sync.RWMutex
-	zeroScores   map[string]float64
-	streakScores map[string]int
+	scraper         *scraper.Scraper
+	listings        map[string]*models.Car
+	bonhamsListings map[string]*models.BonhamsCar // Store original Bonhams data
+	leaderboard     []models.LeaderboardEntry
+	mu              sync.RWMutex
+	zeroScores      map[string]float64
+	streakScores    map[string]int
+	refreshTicker   *time.Ticker
 }
 
 func NewHandler() *Handler {
 	h := &Handler{
-		scraper:      scraper.New(),
-		listings:     make(map[string]*models.Car),
-		leaderboard:  make([]models.LeaderboardEntry, 0),
-		zeroScores:   make(map[string]float64),
-		streakScores: make(map[string]int),
+		scraper:         scraper.New(),
+		listings:        make(map[string]*models.Car),
+		bonhamsListings: make(map[string]*models.BonhamsCar),
+		leaderboard:     make([]models.LeaderboardEntry, 0),
+		zeroScores:      make(map[string]float64),
+		streakScores:    make(map[string]int),
 	}
 
-	// Initialize with some mock data
-	h.initializeMockData()
+	// Initialize with cached or fresh data
+	h.initializeListings()
+
+	// Start automatic refresh timer (every 12 hours)
+	h.startAutoRefresh()
 
 	return h
 }
@@ -70,6 +77,35 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 	displayListing.Price = 0
 
 	c.JSON(http.StatusOK, displayListing)
+}
+
+// GetRandomEnhancedListing godoc
+// @Summary Get a random car listing with all Bonhams characteristics
+// @Description Returns a random car listing with full auction details and characteristics, price hidden for guessing
+// @Tags game
+// @Produce json
+// @Success 200 {object} models.EnhancedCar
+// @Failure 404 {object} map[string]string "error: No listings available"
+// @Router /api/random-enhanced-listing [get]
+func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// Get all Bonhams listing IDs
+	ids := make([]string, 0, len(h.bonhamsListings))
+	for id := range h.bonhamsListings {
+		ids = append(ids, id)
+	}
+
+	// Select random listing
+	randomID := ids[rand.Intn(len(ids))]
+	bonhamsListing := h.bonhamsListings[randomID]
+
+	// Convert to enhanced format and hide price
+	enhancedListing := bonhamsListing.ToEnhancedCar()
+	enhancedListing.Price = 0
+
+	c.JSON(http.StatusOK, enhancedListing)
 }
 
 // CheckGuess godoc
@@ -220,9 +256,9 @@ func (h *Handler) GetDataSource(c *gin.Context) {
 	h.mu.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
-		"data_source":    "motors_live",
+		"data_source":    "bonhams_auctions",
 		"total_listings": totalListings,
-		"description":    "Real Motors.co.uk car listings",
+		"description":    "Real Bonhams Car Auction results",
 	})
 }
 
@@ -248,21 +284,68 @@ func (h *Handler) GetAllListings(c *gin.Context) {
 	})
 }
 
-func (h *Handler) initializeMockData() {
-	// Load car data using the unified scraper interface
-	fmt.Println("Starting Motors.co.uk scraper...")
-	cars, err := h.scraper.GetCarListings(50) // Get 50 cars with variety across makes
-	if err == nil && len(cars) > 0 {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		for _, car := range cars {
-			h.listings[car.ID] = car
-		}
-		fmt.Printf("✅ Loaded %d real cars from Motors.co.uk\n", len(cars))
+func (h *Handler) initializeListings() {
+	// Try to load from cache first
+	if cachedListings, found := cache.LoadFromCache(); found {
+		h.loadListingsFromCache(cachedListings)
 		return
 	}
 
-	fmt.Printf("❌ Motors scraper failed: %v\n", err)
+	// Cache miss or expired, scrape fresh data
+	h.refreshListings()
+}
+
+func (h *Handler) loadListingsFromCache(cachedListings []*models.BonhamsCar) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for _, bonhamsCar := range cachedListings {
+		h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
+		h.listings[bonhamsCar.ID] = bonhamsCar.ToStandardCar()
+	}
+}
+
+func (h *Handler) refreshListings() {
+	fmt.Println("🔄 Refreshing listings from Bonhams Car Auctions...")
+
+	// Get fresh Bonhams data
+	bonhamsCars, err := h.scraper.GetBonhamsListings(50)
+	if err == nil && len(bonhamsCars) > 0 {
+		h.mu.Lock()
+		// Clear existing listings
+		h.listings = make(map[string]*models.Car)
+		h.bonhamsListings = make(map[string]*models.BonhamsCar)
+
+		// Load new listings
+		for _, bonhamsCar := range bonhamsCars {
+			h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
+			h.listings[bonhamsCar.ID] = bonhamsCar.ToStandardCar()
+		}
+		h.mu.Unlock()
+
+		// Save to cache
+		if err := cache.SaveToCache(bonhamsCars); err != nil {
+			fmt.Printf("⚠️ Failed to save cache: %v\n", err)
+		}
+
+		fmt.Printf("✅ Refreshed %d cars from Bonhams Car Auctions\n", len(bonhamsCars))
+		return
+	}
+
+	// Fallback to standard scraper
+	cars, err := h.scraper.GetCarListings(50)
+	if err == nil && len(cars) > 0 {
+		h.mu.Lock()
+		h.listings = make(map[string]*models.Car)
+		for _, car := range cars {
+			h.listings[car.ID] = car
+		}
+		h.mu.Unlock()
+		fmt.Printf("✅ Loaded %d cars from fallback scraper\n", len(cars))
+		return
+	}
+
+	fmt.Printf("❌ All scrapers failed: %v\n", err)
 	fmt.Println("Loading fallback cars for testing...")
 
 	// Fallback to static mock data
@@ -365,6 +448,83 @@ func (h *Handler) initializeMockData() {
 	for i := range mockCars {
 		h.listings[mockCars[i].ID] = &mockCars[i]
 	}
+}
+
+// startAutoRefresh starts a background goroutine that refreshes listings every 12 hours
+func (h *Handler) startAutoRefresh() {
+	// Create ticker for 12-hour intervals
+	h.refreshTicker = time.NewTicker(12 * time.Hour)
+
+	go func() {
+		for range h.refreshTicker.C {
+			fmt.Println("⏰ Auto-refresh triggered (12 hours elapsed)")
+			h.refreshListings()
+		}
+	}()
+
+	fmt.Println("🔄 Auto-refresh scheduled every 12 hours")
+}
+
+// StopAutoRefresh stops the automatic refresh ticker (useful for cleanup)
+func (h *Handler) StopAutoRefresh() {
+	if h.refreshTicker != nil {
+		h.refreshTicker.Stop()
+		fmt.Println("🛑 Auto-refresh stopped")
+	}
+}
+
+// ManualRefresh godoc
+// @Summary Manually refresh car listings
+// @Description Triggers a manual refresh of car listings from Bonhams
+// @Tags admin
+// @Produce json
+// @Success 200 {object} map[string]interface{} "message and count"
+// @Failure 500 {object} map[string]string "error message"
+// @Router /api/refresh-listings [post]
+func (h *Handler) ManualRefresh(c *gin.Context) {
+	fmt.Println("🔄 Manual refresh requested")
+
+	go func() {
+		h.refreshListings()
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Manual refresh started in background",
+		"status":  "refreshing",
+	})
+}
+
+// GetCacheStatus godoc
+// @Summary Get cache status information
+// @Description Returns information about the current cache status and age
+// @Tags debug
+// @Produce json
+// @Success 200 {object} map[string]interface{} "cache status information"
+// @Router /api/cache-status [get]
+func (h *Handler) GetCacheStatus(c *gin.Context) {
+	age, err := cache.GetCacheAge()
+	expired := cache.IsCacheExpired()
+
+	h.mu.RLock()
+	totalListings := len(h.listings)
+	bonhamsListings := len(h.bonhamsListings)
+	h.mu.RUnlock()
+
+	status := gin.H{
+		"cache_expired":    expired,
+		"total_listings":   totalListings,
+		"bonhams_listings": bonhamsListings,
+		"next_refresh_in":  "up to 12 hours",
+	}
+
+	if err == nil {
+		status["cache_age"] = age.Round(time.Minute).String()
+		status["cache_age_hours"] = age.Hours()
+	} else {
+		status["cache_age"] = "no cache file"
+	}
+
+	c.JSON(http.StatusOK, status)
 }
 
 func generateSessionID() string {
