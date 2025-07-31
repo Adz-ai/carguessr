@@ -113,6 +113,9 @@ definitions:
         items:
           type: string
         type: array
+      location:
+        description: Vehicle location e.g. "Bournemouth, Dorset, United Kingdom"
+        type: string
       make:
         type: string
       mileage:
@@ -132,6 +135,9 @@ definitions:
         type: number
       registration:
         type: string
+      saleDate:
+        description: Sale date in format "29 Jul 2025"
+        type: string
       seats:
         type: string
       steering:
@@ -146,6 +152,7 @@ definitions:
         enum:
         - zero
         - streak
+        - challenge
         type: string
       guessedPrice:
         minimum: 0
@@ -195,17 +202,19 @@ info:
     name: Motors Price Guesser Support
     url: https://github.com/your-repo/motors-price-guesser/issues
   description: A fun car price guessing game with multiple game modes using real Bonhams
-    Car Auction data
+    Car Auction data. Now with enhanced security, rate limiting, and 250 cars with
+    7-day refresh cycles.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/your-repo/motors-price-guesser
   title: Motors Price Guesser API
-  version: "2.0"
+  version: "2.1"
 paths:
-  /api/cache-status:
+  /api/admin/cache-status:
     get:
-      description: Returns information about the current cache status and age
+      description: Returns information about the current cache status, age, and listing
+        counts. Requires admin authentication.
       produces:
       - application/json
       responses:
@@ -214,9 +223,120 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: Get cache status information
+        "401":
+          description: 'error: Unauthorized - Admin key required'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - AdminKey: []
+      summary: Get cache status information (Admin Only)
       tags:
-      - debug
+      - admin
+  /api/admin/listings:
+    get:
+      description: Returns all car listings currently loaded in the system with full
+        details including prices. This reveals all answers and is restricted to admin
+        access.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: count and cars array
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 'error: Unauthorized - Admin key required'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - AdminKey: []
+      summary: Get all available car listings (Admin Only)
+      tags:
+      - admin
+  /api/admin/refresh-listings:
+    post:
+      description: Triggers a non-blocking background refresh of car listings from
+        Bonhams. Requires admin authentication and has a 30-minute cooldown between
+        requests. Game continues normally during refresh.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: refresh started, status: refreshing, note: game continues
+            normally'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 'error: Unauthorized - Admin key required'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited or refresh cooldown
+            active'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - AdminKey: []
+      summary: Manually refresh car listings (Admin Only)
+      tags:
+      - admin
+  /api/admin/test-scraper:
+    get:
+      description: Tests the AutoTrader scraper and returns up to 10 cars with full
+        details. This is an expensive operation. Requires admin authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message, count, and cars array
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 'error: Unauthorized - Admin key required'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error and message
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - AdminKey: []
+      summary: Test the car scraper directly (Admin Only)
+      tags:
+      - admin
   /api/challenge/{sessionId}:
     get:
       description: Returns the current state of a challenge session
@@ -247,14 +367,15 @@ paths:
       consumes:
       - application/json
       description: Submit a price guess for the current car in challenge mode. Returns
-        points based on accuracy (max 5000 points).
+        points based on accuracy (max 5000 points). Rate limited to 60 requests per
+        minute per IP.
       parameters:
-      - description: Challenge Session ID
+      - description: Challenge Session ID (16 alphanumeric characters)
         in: path
         name: sessionId
         required: true
         type: string
-      - description: Price guess (guessedPrice only)
+      - description: 'Price guess (max price: £10,000,000)'
         in: body
         name: guess
         required: true
@@ -268,7 +389,8 @@ paths:
           schema:
             $ref: '#/definitions/models.ChallengeResponse'
         "400":
-          description: 'error: Invalid request or session complete'
+          description: 'error: Invalid request, session complete, or price exceeds
+            maximum'
           schema:
             additionalProperties:
               type: string
@@ -279,13 +401,20 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Submit a guess for challenge mode
       tags:
       - challenge
   /api/challenge/start:
     post:
       description: Starts a new 10-car challenge session with GeoGuessr-style scoring.
-        Players get up to 5000 points per car based on guess accuracy.
+        Players get up to 5000 points per car based on guess accuracy. Rate limited
+        to 60 requests per minute per IP.
       produces:
       - application/json
       responses:
@@ -300,6 +429,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Start a new Challenge Mode session
       tags:
       - challenge
@@ -308,9 +443,9 @@ paths:
       consumes:
       - application/json
       description: Submit a price guess and get feedback on accuracy, score, and game
-        status
+        status. Rate limited to 60 requests per minute per IP.
       parameters:
-      - description: Price guess data
+      - description: 'Price guess data (max price: £10,000,000)'
         in: body
         name: guess
         required: true
@@ -324,13 +459,19 @@ paths:
           schema:
             $ref: '#/definitions/models.GuessResponse'
         "400":
-          description: 'error: Invalid request'
+          description: 'error: Invalid request or price exceeds maximum'
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
           description: 'error: Listing not found'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
           schema:
             additionalProperties:
               type: string
@@ -374,21 +515,6 @@ paths:
       summary: Get the game leaderboard
       tags:
       - game
-  /api/listings:
-    get:
-      description: Returns all car listings currently loaded in the system with full
-        details including prices
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: count and cars array
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get all available car listings
-      tags:
-      - listings
   /api/random-enhanced-listing:
     get:
       description: Returns a random car listing with full auction details and characteristics,
@@ -412,7 +538,7 @@ paths:
   /api/random-listing:
     get:
       description: Returns a random car listing with the price hidden (set to 0) for
-        the guessing game
+        the guessing game. Rate limited to 60 requests per minute per IP.
       produces:
       - application/json
       responses:
@@ -426,58 +552,23 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Get a random car listing for the game
-      tags:
-      - game
-  /api/refresh-listings:
-    post:
-      description: Triggers a non-blocking background refresh of car listings from
-        Bonhams. Game continues normally during refresh.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 'message: refresh started, status: refreshing, note: game continues
-            normally'
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Manually refresh car listings
-      tags:
-      - admin
-  /api/test-scraper:
-    get:
-      description: Tests the AutoTrader scraper and returns up to 10 cars with full
-        details
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: message, count, and cars array
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: error and message
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
           schema:
             additionalProperties:
               type: string
             type: object
-      summary: Test the car scraper directly
+      summary: Get a random car listing for the game
       tags:
-      - debug
+      - game
 schemes:
 - http
 - https
+securityDefinitions:
+  AdminKey:
+    description: Admin API key required for administrative endpoints. Can also be
+      passed as 'admin_key' query parameter.
+    in: header
+    name: X-Admin-Key
+    type: apiKey
 swagger: "2.0"
-tags:
-- description: Core game endpoints for different game modes
-  name: game
-- description: Challenge Mode - GeoGuessr style scoring with 10 cars
-  name: challenge
-- description: Car listing management and data access
-  name: listings
-- description: Administrative functions for cache and refresh
-  name: admin
-- description: Debug and monitoring endpoints
-  name: debug

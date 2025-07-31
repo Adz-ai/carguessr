@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"autotraderguesser/internal/scraper"
 )
 
-const ListingAmount int = 60
+const ListingAmount int = 250
 
 type Handler struct {
 	scraper           *scraper.Scraper
@@ -44,19 +45,22 @@ func NewHandler() *Handler {
 	// Initialize with cached or fresh data
 	h.initializeListings()
 
-	// Start automatic refresh timer (every 12 hours)
+	// Start automatic refresh timer (every 7 days)
 	h.startAutoRefresh()
+	fmt.Printf("🔄 Auto-refresh scheduled every 7 days (next refresh: %s)\n",
+		time.Now().Add(7*24*time.Hour).Format("Mon, 02 Jan 2006 15:04"))
 
 	return h
 }
 
 // GetRandomListing godoc
 // @Summary Get a random car listing for the game
-// @Description Returns a random car listing with the price hidden (set to 0) for the guessing game
+// @Description Returns a random car listing with the price hidden (set to 0) for the guessing game. Rate limited to 60 requests per minute per IP.
 // @Tags game
 // @Produce json
 // @Success 200 {object} models.EnhancedCar
 // @Failure 404 {object} map[string]string "error: No listings available"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/random-listing [get]
 func (h *Handler) GetRandomListing(c *gin.Context) {
 	h.mu.RLock()
@@ -115,14 +119,15 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 
 // CheckGuess godoc
 // @Summary Submit a price guess for a car
-// @Description Submit a price guess and get feedback on accuracy, score, and game status
+// @Description Submit a price guess and get feedback on accuracy, score, and game status. Rate limited to 60 requests per minute per IP.
 // @Tags game
 // @Accept json
 // @Produce json
-// @Param guess body models.GuessRequest true "Price guess data"
+// @Param guess body models.GuessRequest true "Price guess data (max price: £10,000,000)"
 // @Success 200 {object} models.GuessResponse
-// @Failure 400 {object} map[string]string "error: Invalid request"
+// @Failure 400 {object} map[string]string "error: Invalid request or price exceeds maximum"
 // @Failure 404 {object} map[string]string "error: Listing not found"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/check-guess [post]
 func (h *Handler) CheckGuess(c *gin.Context) {
 	// Read the raw body for debugging
@@ -142,6 +147,18 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 
 	log.Printf("CheckGuess: Received request - ListingID: %s, GuessedPrice: %.2f, GameMode: %s",
 		req.ListingID, req.GuessedPrice, req.GameMode)
+
+	// Additional security validation
+	if req.GuessedPrice > 10000000 { // £10 million max
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
+		return
+	}
+
+	// Validate listing ID format (alphanumeric with hyphens)
+	if !isValidListingID(req.ListingID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid listing ID format"})
+		return
+	}
 
 	h.mu.RLock()
 	bonhamsListing, exists := h.bonhamsListings[req.ListingID]
@@ -230,13 +247,16 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 }
 
 // TestScraper godoc
-// @Summary Test the car scraper directly
-// @Description Tests the AutoTrader scraper and returns up to 10 cars with full details
-// @Tags debug
+// @Summary Test the car scraper directly (Admin Only)
+// @Description Tests the AutoTrader scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.
+// @Tags admin
+// @Security AdminKey
 // @Produce json
 // @Success 200 {object} map[string]interface{} "message, count, and cars array"
+// @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Failure 500 {object} map[string]string "error and message"
-// @Router /api/test-scraper [get]
+// @Router /api/admin/test-scraper [get]
 func (h *Handler) TestScraper(c *gin.Context) {
 	cars, err := h.scraper.GetCarListings(10)
 	if err != nil {
@@ -282,12 +302,15 @@ func (h *Handler) GetDataSource(c *gin.Context) {
 }
 
 // GetAllListings godoc
-// @Summary Get all available car listings
-// @Description Returns all car listings currently loaded in the system with full details including prices
-// @Tags listings
+// @Summary Get all available car listings (Admin Only)
+// @Description Returns all car listings currently loaded in the system with full details including prices. This reveals all answers and is restricted to admin access.
+// @Tags admin
+// @Security AdminKey
 // @Produce json
 // @Success 200 {object} map[string]interface{} "count and cars array"
-// @Router /api/listings [get]
+// @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
+// @Router /api/admin/listings [get]
 func (h *Handler) GetAllListings(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -336,7 +359,7 @@ func (h *Handler) loadListingsFromCache(cachedListings []*models.BonhamsCar) {
 func (h *Handler) refreshListings() {
 	fmt.Println("🔄 Refreshing listings from Bonhams Car Auctions...")
 
-	// Get fresh Bonhams data (increased from 50 to 100 due to sold-only filtering)
+	// Get fresh Bonhams data (250 cars with parallel scraping)
 	bonhamsCars, err := h.scraper.GetBonhamsListings(ListingAmount)
 	if err == nil && len(bonhamsCars) > 0 {
 		// Filter out listings with £700 price (indicates missing price data)
@@ -400,14 +423,14 @@ func (h *Handler) refreshListings() {
 	}
 }
 
-// startAutoRefresh starts a background goroutine that refreshes listings every 12 hours
+// startAutoRefresh starts a background goroutine that refreshes listings every 7 days
 func (h *Handler) startAutoRefresh() {
-	// Create ticker for 12-hour intervals
-	h.refreshTicker = time.NewTicker(24 * time.Hour)
+	// Create ticker for 7-day intervals
+	h.refreshTicker = time.NewTicker(7 * 24 * time.Hour)
 
 	go func() {
 		for range h.refreshTicker.C {
-			fmt.Println("⏰ Auto-refresh triggered (24 hours elapsed)")
+			fmt.Println("⏰ Auto-refresh triggered (7 days elapsed)")
 			// Run refresh in background to avoid blocking gameplay
 			go h.refreshListingsAsync()
 		}
@@ -420,7 +443,7 @@ func (h *Handler) startAutoRefresh() {
 func (h *Handler) refreshListingsAsync() {
 	fmt.Println("🔄 Starting background refresh (non-blocking)...")
 
-	// Get fresh Bonhams data (this may take a few minutes) - increased from 50 to 100
+	// Get fresh Bonhams data (this may take a few minutes) - 250 cars with parallel scraping
 	bonhamsCars, err := h.scraper.GetBonhamsListings(ListingAmount)
 	if err != nil {
 		fmt.Printf("❌ Background refresh failed: %v\n", err)
@@ -467,12 +490,15 @@ func (h *Handler) StopAutoRefresh() {
 }
 
 // ManualRefresh godoc
-// @Summary Manually refresh car listings
-// @Description Triggers a non-blocking background refresh of car listings from Bonhams. Game continues normally during refresh.
+// @Summary Manually refresh car listings (Admin Only)
+// @Description Triggers a non-blocking background refresh of car listings from Bonhams. Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.
 // @Tags admin
+// @Security AdminKey
 // @Produce json
 // @Success 200 {object} map[string]interface{} "message: refresh started, status: refreshing, note: game continues normally"
-// @Router /api/refresh-listings [post]
+// @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited or refresh cooldown active"
+// @Router /api/admin/refresh-listings [post]
 func (h *Handler) ManualRefresh(c *gin.Context) {
 	fmt.Println("🔄 Manual refresh requested")
 
@@ -488,12 +514,15 @@ func (h *Handler) ManualRefresh(c *gin.Context) {
 }
 
 // GetCacheStatus godoc
-// @Summary Get cache status information
-// @Description Returns information about the current cache status and age
-// @Tags debug
+// @Summary Get cache status information (Admin Only)
+// @Description Returns information about the current cache status, age, and listing counts. Requires admin authentication.
+// @Tags admin
+// @Security AdminKey
 // @Produce json
 // @Success 200 {object} map[string]interface{} "cache status information"
-// @Router /api/cache-status [get]
+// @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
+// @Router /api/admin/cache-status [get]
 func (h *Handler) GetCacheStatus(c *gin.Context) {
 	age, err := cache.GetCacheAge()
 	expired := cache.IsCacheExpired()
@@ -521,11 +550,12 @@ func (h *Handler) GetCacheStatus(c *gin.Context) {
 
 // StartChallenge godoc
 // @Summary Start a new Challenge Mode session
-// @Description Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy.
+// @Description Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy. Rate limited to 60 requests per minute per IP.
 // @Tags challenge
 // @Produce json
 // @Success 200 {object} models.ChallengeSession "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0"
 // @Failure 404 {object} map[string]string "error: Not enough cars available for challenge mode"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/challenge/start [post]
 func (h *Handler) StartChallenge(c *gin.Context) {
 	h.mu.RLock()
@@ -587,6 +617,12 @@ func (h *Handler) StartChallenge(c *gin.Context) {
 func (h *Handler) GetChallengeSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
+	// Validate session ID
+	if !isValidSessionID(sessionID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+		return
+	}
+
 	h.mu.RLock()
 	session, exists := h.challengeSessions[sessionID]
 	h.mu.RUnlock()
@@ -601,22 +637,35 @@ func (h *Handler) GetChallengeSession(c *gin.Context) {
 
 // SubmitChallengeGuess godoc
 // @Summary Submit a guess for challenge mode
-// @Description Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points).
+// @Description Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points). Rate limited to 60 requests per minute per IP.
 // @Tags challenge
 // @Accept json
 // @Produce json
-// @Param sessionId path string true "Challenge Session ID"
-// @Param guess body models.ChallengeGuessRequest true "Price guess (guessedPrice only)"
+// @Param sessionId path string true "Challenge Session ID (16 alphanumeric characters)"
+// @Param guess body models.ChallengeGuessRequest true "Price guess (max price: £10,000,000)"
 // @Success 200 {object} models.ChallengeResponse "points earned, totalScore, isLastCar, message, originalUrl"
-// @Failure 400 {object} map[string]string "error: Invalid request or session complete"
+// @Failure 400 {object} map[string]string "error: Invalid request, session complete, or price exceeds maximum"
 // @Failure 404 {object} map[string]string "error: Session not found"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/challenge/{sessionId}/guess [post]
 func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
+	// Validate session ID
+	if !isValidSessionID(sessionID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+		return
+	}
+
 	var req models.ChallengeGuessRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Additional security validation
+	if req.GuessedPrice > 10000000 { // £10 million max
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
 		return
 	}
 
@@ -741,4 +790,27 @@ func generateSessionID() string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+// isValidListingID validates listing ID format
+func isValidListingID(id string) bool {
+	// Allow alphanumeric characters, hyphens, and underscores
+	// Max length 100 characters
+	if len(id) == 0 || len(id) > 100 {
+		return false
+	}
+
+	validID := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	return validID.MatchString(id)
+}
+
+// isValidSessionID validates session ID format
+func isValidSessionID(id string) bool {
+	// Session IDs should be 16 characters, alphanumeric only
+	if len(id) != 16 {
+		return false
+	}
+
+	validID := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	return validID.MatchString(id)
 }

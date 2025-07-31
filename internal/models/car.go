@@ -52,6 +52,8 @@ type BonhamsCar struct {
 	// Additional extracted info
 	MileageNumeric int    `json:"mileageNumeric,omitempty"` // Numeric version for calculations
 	Description    string `json:"description,omitempty"`    // Combined description
+	SaleDate       string `json:"saleDate,omitempty"`       // Sale date in format "29 Jul 2025"
+	Location       string `json:"location,omitempty"`       // Vehicle location e.g. "Bournemouth, Dorset, United Kingdom"
 }
 
 // ToStandardCar converts BonhamsCar to the standard Car model for compatibility
@@ -97,6 +99,8 @@ func (bc *BonhamsCar) ToEnhancedCar() *EnhancedCar {
 		InteriorColor:    bc.InteriorColor,
 		Steering:         bc.Steering,
 		KeyFacts:         bc.KeyFacts,
+		SaleDate:         bc.SaleDate,
+		Location:         bc.Location,
 		AuctionDetails:   true,
 	}
 }
@@ -132,6 +136,8 @@ type EnhancedCar struct {
 	Steering         string   `json:"steering,omitempty"`         // "Right-hand drive"
 	KeyFacts         []string `json:"keyFacts,omitempty"`         // Auction key facts
 	Description      string   `json:"description,omitempty"`      // Combined description
+	SaleDate         string   `json:"saleDate,omitempty"`         // Sale date in format "29 Jul 2025"
+	Location         string   `json:"location,omitempty"`         // Vehicle location e.g. "Bournemouth, Dorset, United Kingdom"
 	AuctionDetails   bool     `json:"auctionDetails"`             // Flag indicating this is auction data
 }
 

@@ -16,7 +16,7 @@ type ListingCache struct {
 
 const (
 	CacheFileName = "listings_cache.json"
-	CacheExpiry   = 24 * time.Hour
+	CacheExpiry   = 7 * 24 * time.Hour // 7 days
 )
 
 // LoadFromCache loads cached listings if they exist and are not expired
@@ -36,12 +36,13 @@ func LoadFromCache() ([]*models.BonhamsCar, bool) {
 
 	// Check if cache is expired
 	if time.Since(cache.Timestamp) > CacheExpiry {
-		fmt.Printf("⏰ Cache expired (%v old), will refresh\n", time.Since(cache.Timestamp).Round(time.Minute))
+		fmt.Printf("⏰ Cache expired (%.1f days old), will refresh\n", time.Since(cache.Timestamp).Hours()/24)
 		return nil, false
 	}
 
-	fmt.Printf("✅ Loaded %d cars from cache (updated %v ago)\n",
-		len(cache.Data), time.Since(cache.Timestamp).Round(time.Minute))
+	daysRemaining := (CacheExpiry - time.Since(cache.Timestamp)).Hours() / 24
+	fmt.Printf("✅ Loaded %d cars from cache (updated %.1f days ago, %.1f days until refresh)\n",
+		len(cache.Data), time.Since(cache.Timestamp).Hours()/24, daysRemaining)
 	return cache.Data, true
 }
 

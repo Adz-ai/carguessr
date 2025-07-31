@@ -6,11 +6,21 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"autotraderguesser/internal/models"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+)
+
+const (
+	// Maximum number of concurrent detail page scrapers
+	maxConcurrentScrapers = 5
+	// Timeout for individual page loads
+	pageLoadTimeout = 10 * time.Second
+	// Minimum delay between requests to same domain
+	minRequestDelay = 500 * time.Millisecond
 )
 
 // BonhamsScraper handles scraping from Bonhams Car Auctions
@@ -62,8 +72,8 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 
 	// Add extra pages since many cars will be filtered out (didn't meet reserve)
 	pagesNeeded = pagesNeeded * 3 // Triple the pages to account for filtering
-	if pagesNeeded > 15 {
-		pagesNeeded = 15 // Cap at 15 pages to be reasonable
+	if pagesNeeded > 50 {
+		pagesNeeded = 50 // Increased cap for 250 cars
 	}
 
 	fmt.Printf("🔍 Attempting to scrape %d sold listings across %d pages\n", maxListings, pagesNeeded)
@@ -73,10 +83,9 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		searchURL := fmt.Sprintf("https://carsonline.bonhams.com/en/auctions/results?page=%d", pageNum)
 
 		fmt.Printf("📍 Navigating to page %d: %s\n", pageNum, searchURL)
-		page.MustNavigate(searchURL).MustWaitLoad()
+		page.MustNavigate(searchURL)
 
-		// Wait for the page to fully load
-		time.Sleep(3 * time.Second)
+		// Use WaitStable for smarter waiting
 		page.MustWaitStable()
 
 		// Look for car listing elements - Bonhams uses /listings/ URLs
@@ -115,9 +124,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 						}
 
 						// Look for indicators that the item sold
-						isSold := strings.Contains(cardTextLower, "sold for") ||
-							strings.Contains(cardTextLower, "hammer price") ||
-							(strings.Contains(cardTextLower, "sold") && !strings.Contains(cardTextLower, "bid to"))
+						isSold := strings.Contains(cardTextLower, "sold for") || strings.Contains(cardTextLower, "hammer price")
 
 						if !isSold {
 							fmt.Printf("Skipping item (no sold indicator): %s\n", *href)
@@ -172,9 +179,9 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 			break
 		}
 
-		// Don't spam the server - small delay between pages
+		// Minimal delay between page requests
 		if pageNum < pagesNeeded {
-			time.Sleep(2 * time.Second)
+			time.Sleep(minRequestDelay)
 		}
 	}
 
@@ -220,24 +227,63 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		allFoundLinks = allFoundLinks[:maxListings]
 	}
 
-	// Scrape each detail page (already filtered for sold items)
-	for i, detailURL := range allFoundLinks {
-		fmt.Printf("Scraping sold car %d/%d: %s\n", i+1, len(allFoundLinks), detailURL)
+	// Scrape detail pages in parallel
+	fmt.Printf("🚀 Starting parallel scraping of %d cars with %d workers\n", len(allFoundLinks), maxConcurrentScrapers)
+	startTime := time.Now()
 
-		car := s.scrapeDetailPage(detailURL)
-		if car != nil && car.Price > 0 {
-			cars = append(cars, car)
-			fmt.Printf("✅ Sold car added: %s %s %d (£%.0f, %s)\n",
-				car.Make, car.Model, car.Year, car.Price, car.Mileage)
-		} else {
-			fmt.Printf("❌ Failed to scrape car details: %s\n", detailURL)
-		}
+	type result struct {
+		car *models.BonhamsCar
+		url string
+		err error
+	}
 
-		// Add delay between requests to be respectful
-		if i < len(allFoundLinks)-1 {
-			time.Sleep(2 * time.Second)
+	// Create channels for work distribution
+	urlChan := make(chan string, len(allFoundLinks))
+	resultChan := make(chan result, len(allFoundLinks))
+
+	// Create worker pool
+	var wg sync.WaitGroup
+	for i := 0; i < maxConcurrentScrapers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for url := range urlChan {
+				fmt.Printf("[Worker %d] Scraping: %s\n", workerID, url)
+				car := s.scrapeDetailPageConcurrent(url)
+				if car != nil && car.Price > 0 {
+					resultChan <- result{car: car, url: url}
+					fmt.Printf("[Worker %d] ✅ Success: %s %s %d (£%.0f)\n",
+						workerID, car.Make, car.Model, car.Year, car.Price)
+				} else {
+					resultChan <- result{car: nil, url: url, err: fmt.Errorf("failed to scrape")}
+					fmt.Printf("[Worker %d] ❌ Failed: %s\n", workerID, url)
+				}
+				// Small delay to avoid overwhelming the server
+				time.Sleep(minRequestDelay)
+			}
+		}(i)
+	}
+
+	// Queue all URLs
+	for _, url := range allFoundLinks {
+		urlChan <- url
+	}
+	close(urlChan)
+
+	// Wait for all workers to complete
+	wg.Wait()
+	close(resultChan)
+
+	// Collect results
+	for result := range resultChan {
+		if result.car != nil {
+			cars = append(cars, result.car)
 		}
 	}
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("⏱️  Scraping completed in %.2f seconds (%.2f cars/second)\n",
+		elapsed.Seconds(), float64(len(cars))/elapsed.Seconds())
 
 	if len(cars) == 0 {
 		return nil, fmt.Errorf("no sold cars could be found from Bonhams")
@@ -297,91 +343,40 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		}
 	}
 
-	// 2. Extract price AND sale status (must be SOLD, not just bid)
-	fmt.Println("Extracting price and sale status...")
+	// 2. Extract price using precise selector
+	fmt.Println("Extracting price...")
 	priceResult, err := page.Eval(`() => {
-		const result = { price: '', status: '', fullText: '' };
+		// Use the precise selector provided by the user
+		const priceElement = document.querySelector('.listing-state__value.listing-final-price p[data-qa="listing highest bid value"]');
+		if (priceElement) {
+			const priceText = priceElement.textContent.trim();
+			const priceMatch = priceText.match(/£\s*([\d,]+)/);
+			if (priceMatch) {
+				return priceMatch[0];
+			}
+		}
 		
-		const priceSelectors = [
-			'.price',
+		// Fallback to broader search if precise selector doesn't work
+		const fallbackSelectors = [
+			'.listing-state__value p',
+			'[data-qa="listing highest bid value"]',
+			'.listing-final-price',
 			'.sold-price',
-			'.hammer-price',
-			'.estimate',
-			'*[class*="price"]',
-			'*[class*="sold"]',
-			'*[class*="hammer"]',
-			'*[data-qa*="price"]',
-			'*[data-qa*="sold"]'
+			'.hammer-price'
 		];
 		
-		// Look for price and status information
-		for (let selector of priceSelectors) {
-			const elements = document.querySelectorAll(selector);
-			for (let el of elements) {
-				const text = (el.textContent || '').toLowerCase();
-				const originalText = el.textContent || '';
-				
-				// Check if this element contains price information
-				if (text.includes('£') && text.match(/£\s*[\d,]+/)) {
-					result.fullText = originalText;
-					
-					// Extract the price
-					const priceMatch = originalText.match(/£\s*([\d,]+)/);
-					if (priceMatch) {
-						result.price = priceMatch[0];
-					}
-					
-					// Determine sale status - CRITICAL: only accept SOLD items
-					if (text.includes('sold') && !text.includes('bid to')) {
-						result.status = 'sold';
-						return JSON.stringify(result);
-					} else if (text.includes('bid to') || text.includes('bidding')) {
-						result.status = 'bid_to'; // Did not meet reserve
-						return JSON.stringify(result);
-					} else if (text.includes('hammer') && !text.includes('bid to')) {
-						result.status = 'sold'; // Hammer price usually means sold
-						return JSON.stringify(result);
-					}
+		for (let selector of fallbackSelectors) {
+			const el = document.querySelector(selector);
+			if (el) {
+				const text = el.textContent || '';
+				const priceMatch = text.match(/£\s*([\d,]+)/);
+				if (priceMatch) {
+					return priceMatch[0];
 				}
 			}
 		}
 		
-		// Broader search for sale status in the entire page
-		const allElements = document.querySelectorAll('*');
-		for (let el of allElements) {
-			const text = (el.textContent || '').toLowerCase();
-			const originalText = el.textContent || '';
-			
-			// Look for explicit sale status
-			if (text.includes('sold for £') || 
-				text.includes('hammer price £') ||
-				(text.includes('sold') && text.includes('£') && text.match(/£\s*[\d,]+/))) {
-				
-				const priceMatch = originalText.match(/£\s*([\d,]+)/);
-				if (priceMatch) {
-					result.price = priceMatch[0];
-					result.fullText = originalText;
-					result.status = 'sold';
-					return JSON.stringify(result);
-				}
-			}
-			
-			// Check for "bid to" which means reserve not met
-			if (text.includes('bid to £') || 
-				text.includes('bidding to £') ||
-				(text.includes('bid to') && text.includes('£'))) {
-				
-				const priceMatch = originalText.match(/£\s*([\d,]+)/);
-				if (priceMatch) {
-					result.price = priceMatch[0];
-					result.fullText = originalText;
-					result.status = 'bid_to';
-					return JSON.stringify(result);
-				}
-			}
-		}
-		
-		return JSON.stringify(result);
+		return '';
 	}`)
 
 	if err == nil {
@@ -392,7 +387,84 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		}
 	}
 
-	// 3. Extract specifications from data-qa attributes
+	// 3. Extract sale date using the provided selector
+	fmt.Println("Extracting sale date...")
+	saleDateResult, err := page.Eval(`() => {
+		// Use the precise selector provided by the user
+		const dateElement = document.querySelector('.countdown__wrapper .end-date[data-qa="listing end date"]');
+		if (dateElement) {
+			const dateText = dateElement.textContent.trim();
+			// Extract just the date part, removing the time
+			const dateMatch = dateText.match(/(\d{1,2}\s+\w+\s+\d{4})/);
+			if (dateMatch) {
+				return dateMatch[1];
+			}
+		}
+		
+		// Fallback selectors
+		const fallbackSelectors = [
+			'[data-qa="listing end date"]',
+			'.end-date',
+			'.countdown__wrapper span'
+		];
+		
+		for (let selector of fallbackSelectors) {
+			const el = document.querySelector(selector);
+			if (el) {
+				const text = el.textContent || '';
+				const dateMatch = text.match(/(\d{1,2}\s+\w+\s+\d{4})/);
+				if (dateMatch) {
+					return dateMatch[1];
+				}
+			}
+		}
+		
+		return '';
+	}`)
+
+	if err == nil {
+		saleDateText := strings.TrimSpace(fmt.Sprintf("%v", saleDateResult.Value))
+		if saleDateText != "" {
+			car.SaleDate = saleDateText
+			fmt.Printf("Found sale date: %s\n", saleDateText)
+		}
+	}
+
+	// 4. Extract vehicle location
+	fmt.Println("Extracting vehicle location...")
+	locationResult, err := page.Eval(`() => {
+		// Use the precise selector provided by the user
+		const locationElement = document.querySelector('.auction-info-details__location .text[data-v-0a8ab3c9]');
+		if (locationElement) {
+			return locationElement.textContent.trim();
+		}
+		
+		// Fallback selectors
+		const fallbackSelectors = [
+			'[data-qa="auction information location"]',
+			'.auction-info-details__location .text',
+			'.icon-text[data-qa="auction information location"] .text'
+		];
+		
+		for (let selector of fallbackSelectors) {
+			const el = document.querySelector(selector);
+			if (el) {
+				return el.textContent.trim();
+			}
+		}
+		
+		return '';
+	}`)
+
+	if err == nil {
+		locationText := strings.TrimSpace(fmt.Sprintf("%v", locationResult.Value))
+		if locationText != "" {
+			car.Location = locationText
+			fmt.Printf("Found location: %s\n", locationText)
+		}
+	}
+
+	// 5. Extract specifications from data-qa attributes
 	fmt.Println("Extracting specifications from data-qa attributes...")
 	specsResult, err := page.Eval(`() => {
 		const specs = {};
@@ -431,7 +503,7 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		}
 	}
 
-	// 4. Extract key facts from data-qa="auction information key fact"
+	// 6. Extract key facts from data-qa="auction information key fact"
 	fmt.Println("Extracting key facts...")
 	keyFactsResult, err := page.Eval(`() => {
 		const keyFactElements = document.querySelectorAll('li[data-qa="auction information key fact"]');
@@ -462,7 +534,7 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		}
 	}
 
-	// 5. Extract images
+	// 7. Extract images
 	fmt.Println("Extracting images...")
 	imageResult, err := page.Eval(`() => {
 		const images = [];
@@ -497,6 +569,179 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 
 	fmt.Printf("Scraped car: Make=%s, Model=%s, Year=%d, Price=%.0f, Mileage=%s\n",
 		car.Make, car.Model, car.Year, car.Price, car.Mileage)
+	return car
+}
+
+// scrapeDetailPageConcurrent is an optimized version for concurrent scraping
+func (s *BonhamsScraper) scrapeDetailPageConcurrent(url string) *models.BonhamsCar {
+	// Create a new page for concurrent scraping
+	page := s.browser.MustPage()
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Printf("Detail page panic recovered: %v\n", err)
+		}
+		page.Close()
+	}()
+
+	// Set timeout for page operations
+	page = page.Timeout(pageLoadTimeout)
+
+	if err := page.Navigate(url); err != nil {
+		fmt.Printf("Failed to navigate to %s: %v\n", url, err)
+		return nil
+	}
+
+	// Use WaitStable for faster page loading
+	page.MustWaitStable()
+
+	car := &models.BonhamsCar{
+		ID:          fmt.Sprintf("bonhams-%d", time.Now().UnixNano()),
+		OriginalURL: url,
+	}
+
+	// Execute all extractions in parallel using a single JavaScript evaluation
+	extractionScript := `() => {
+		const result = {
+			title: '',
+			price: '',
+			saleDate: '',
+			location: '',
+			specs: {},
+			keyFacts: [],
+			images: []
+		};
+
+		// Extract title
+		const titleSelectors = ['h1', '.lot-title', '.auction-title', '[data-testid="lot-title"]', '.page-title'];
+		for (let selector of titleSelectors) {
+			const element = document.querySelector(selector);
+			if (element && element.textContent.trim()) {
+				result.title = element.textContent.trim();
+				break;
+			}
+		}
+
+		// Extract price
+		const priceElement = document.querySelector('.listing-state__value.listing-final-price p[data-qa="listing highest bid value"]');
+		if (priceElement) {
+			const priceText = priceElement.textContent.trim();
+			const priceMatch = priceText.match(/£\s*([\d,]+)/);
+			if (priceMatch) {
+				result.price = priceMatch[0];
+			}
+		}
+
+		// Extract sale date
+		const dateElement = document.querySelector('.countdown__wrapper .end-date[data-qa="listing end date"]');
+		if (dateElement) {
+			const dateText = dateElement.textContent.trim();
+			const dateMatch = dateText.match(/(\d{1,2}\s+\w+\s+\d{4})/);
+			if (dateMatch) {
+				result.saleDate = dateMatch[1];
+			}
+		}
+
+		// Extract location
+		const locationElement = document.querySelector('.auction-info-details__location .text[data-v-0a8ab3c9]');
+		if (locationElement) {
+			result.location = locationElement.textContent.trim();
+		}
+
+		// Extract specifications
+		const qaSelectors = [
+			'li[data-qa="auction information stat chassis"]',
+			'li[data-qa="auction information stat mileage"]',
+			'li[data-qa="auction information stat engine"]',
+			'li[data-qa="auction information stat gearbox"]',
+			'li[data-qa="auction information stat color"]',
+			'li[data-qa="auction information stat interior"]',
+			'li[data-qa="auction information stat steering"]',
+			'li[data-qa="auction information stat fuel_type"]'
+		];
+		
+		for (let selector of qaSelectors) {
+			const element = document.querySelector(selector);
+			if (element) {
+				const textElement = element.querySelector('.text');
+				if (textElement) {
+					const qaType = element.getAttribute('data-qa').split(' ').pop();
+					result.specs[qaType] = textElement.textContent.trim();
+				}
+			}
+		}
+
+		// Extract key facts
+		const keyFactElements = document.querySelectorAll('li[data-qa="auction information key fact"]');
+		for (let element of keyFactElements) {
+			const fact = element.textContent.trim();
+			if (fact) {
+				result.keyFacts.push(fact);
+			}
+		}
+
+		// Extract images
+		const imgs = document.querySelectorAll('img');
+		for (let img of imgs) {
+			if (img.src && 
+				(img.src.includes('bonhams') || img.src.includes('cloudinary') || 
+				 img.src.includes('imgix') || img.src.includes('amazonaws')) &&
+				!img.src.includes('logo') && !img.src.includes('icon') && img.width > 100) {
+				result.images.push(img.src);
+			}
+		}
+		result.images = [...new Set(result.images.slice(0, 10))];
+
+		return JSON.stringify(result);
+	}`
+
+	extractResult := page.MustEval(extractionScript)
+
+	// Parse the extraction results
+	var extracted struct {
+		Title    string            `json:"title"`
+		Price    string            `json:"price"`
+		SaleDate string            `json:"saleDate"`
+		Location string            `json:"location"`
+		Specs    map[string]string `json:"specs"`
+		KeyFacts []string          `json:"keyFacts"`
+		Images   []string          `json:"images"`
+	}
+
+	if err := json.Unmarshal([]byte(extractResult.String()), &extracted); err != nil {
+		fmt.Printf("Failed to parse extraction results: %v\n", err)
+		return nil
+	}
+
+	// Process extracted data
+	s.parseTitle(extracted.Title, car)
+	s.parsePrice(extracted.Price, car)
+	car.SaleDate = extracted.SaleDate
+	car.Location = extracted.Location
+	car.Images = extracted.Images
+	car.KeyFacts = extracted.KeyFacts
+	car.Description = strings.Join(extracted.KeyFacts, " • ")
+
+	// Process specifications
+	for key, value := range extracted.Specs {
+		switch key {
+		case "mileage":
+			car.Mileage = value
+			s.extractNumericMileage(value, car)
+		case "engine":
+			car.Engine = value
+		case "gearbox":
+			car.Gearbox = value
+		case "color":
+			car.ExteriorColor = value
+		case "interior":
+			car.InteriorColor = value
+		case "steering":
+			car.Steering = value
+		case "fuel_type":
+			car.FuelType = value
+		}
+	}
+
 	return car
 }
 
@@ -582,17 +827,12 @@ func (s *BonhamsScraper) parseTitle(title string, car *models.BonhamsCar) {
 
 // parsePrice extracts price from price text
 func (s *BonhamsScraper) parsePrice(priceText string, car *models.BonhamsCar) {
-	// Look for patterns like:
-	// "Sold for £123,456"
-	// "Hammer price: £98,765"
-	// "£45,000 - £65,000 (estimate)"
-
+	// Extract number from format like "£29,000"
 	priceRegex := regexp.MustCompile(`£\s*([0-9,]+)`)
-	matches := priceRegex.FindAllStringSubmatch(priceText, -1)
+	matches := priceRegex.FindStringSubmatch(priceText)
 
-	if len(matches) > 0 {
-		// Take the first price found (usually the sold price)
-		priceStr := strings.ReplaceAll(matches[0][1], ",", "")
+	if len(matches) > 1 {
+		priceStr := strings.ReplaceAll(matches[1], ",", "")
 		if price, err := strconv.ParseFloat(priceStr, 64); err == nil {
 			car.Price = price
 		}
@@ -607,7 +847,10 @@ func (s *BonhamsScraper) initBrowser() error {
 		Set("user-agent", userAgent).
 		Set("disable-blink-features", "AutomationControlled").
 		Set("disable-web-security").
-		Set("allow-running-insecure-content")
+		Set("allow-running-insecure-content").
+		Set("max-connections-per-host", "10"). // Increase concurrent connections
+		Set("aggressive-cache-discard").       // Reduce memory usage
+		Set("disable-dev-shm-usage")           // Use /tmp instead of /dev/shm
 
 	url, err := l.Launch()
 	if err != nil {

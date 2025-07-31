@@ -23,16 +23,21 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/cache-status": {
+        "/api/admin/cache-status": {
             "get": {
-                "description": "Returns information about the current cache status and age",
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Returns information about the current cache status, age, and listing counts. Requires admin authentication.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "debug"
+                    "admin"
                 ],
-                "summary": "Get cache status information",
+                "summary": "Get cache status information (Admin Only)",
                 "responses": {
                     "200": {
                         "description": "cache status information",
@@ -40,13 +45,172 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    },
+                    "401": {
+                        "description": "error: Unauthorized - Admin key required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/listings": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Returns all car listings currently loaded in the system with full details including prices. This reveals all answers and is restricted to admin access.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get all available car listings (Admin Only)",
+                "responses": {
+                    "200": {
+                        "description": "count and cars array",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "error: Unauthorized - Admin key required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/refresh-listings": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Triggers a non-blocking background refresh of car listings from Bonhams. Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Manually refresh car listings (Admin Only)",
+                "responses": {
+                    "200": {
+                        "description": "message: refresh started, status: refreshing, note: game continues normally",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "error: Unauthorized - Admin key required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited or refresh cooldown active",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/test-scraper": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Tests the AutoTrader scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Test the car scraper directly (Admin Only)",
+                "responses": {
+                    "200": {
+                        "description": "message, count, and cars array",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "error: Unauthorized - Admin key required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error and message",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
         "/api/challenge/start": {
             "post": {
-                "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy.",
+                "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy. Rate limited to 60 requests per minute per IP.",
                 "produces": [
                     "application/json"
                 ],
@@ -63,6 +227,15 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "error: Not enough cars available for challenge mode",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -113,7 +286,7 @@ const docTemplate = `{
         },
         "/api/challenge/{sessionId}/guess": {
             "post": {
-                "description": "Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points).",
+                "description": "Submit a price guess for the current car in challenge mode. Returns points based on accuracy (max 5000 points). Rate limited to 60 requests per minute per IP.",
                 "consumes": [
                     "application/json"
                 ],
@@ -127,13 +300,13 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Challenge Session ID",
+                        "description": "Challenge Session ID (16 alphanumeric characters)",
                         "name": "sessionId",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Price guess (guessedPrice only)",
+                        "description": "Price guess (max price: £10,000,000)",
                         "name": "guess",
                         "in": "body",
                         "required": true,
@@ -150,7 +323,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "error: Invalid request or session complete",
+                        "description": "error: Invalid request, session complete, or price exceeds maximum",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -166,13 +339,22 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
         "/api/check-guess": {
             "post": {
-                "description": "Submit a price guess and get feedback on accuracy, score, and game status",
+                "description": "Submit a price guess and get feedback on accuracy, score, and game status. Rate limited to 60 requests per minute per IP.",
                 "consumes": [
                     "application/json"
                 ],
@@ -185,7 +367,7 @@ const docTemplate = `{
                 "summary": "Submit a price guess for a car",
                 "parameters": [
                     {
-                        "description": "Price guess data",
+                        "description": "Price guess data (max price: £10,000,000)",
                         "name": "guess",
                         "in": "body",
                         "required": true,
@@ -202,7 +384,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "error: Invalid request",
+                        "description": "error: Invalid request or price exceeds maximum",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -212,6 +394,15 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "error: Listing not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -274,27 +465,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/listings": {
-            "get": {
-                "description": "Returns all car listings currently loaded in the system with full details including prices",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "listings"
-                ],
-                "summary": "Get all available car listings",
-                "responses": {
-                    "200": {
-                        "description": "count and cars array",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/random-enhanced-listing": {
             "get": {
                 "description": "Returns a random car listing with full auction details and characteristics, price hidden for guessing",
@@ -326,7 +496,7 @@ const docTemplate = `{
         },
         "/api/random-listing": {
             "get": {
-                "description": "Returns a random car listing with the price hidden (set to 0) for the guessing game",
+                "description": "Returns a random car listing with the price hidden (set to 0) for the guessing game. Rate limited to 60 requests per minute per IP.",
                 "produces": [
                     "application/json"
                 ],
@@ -349,51 +519,9 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
-                    }
-                }
-            }
-        },
-        "/api/refresh-listings": {
-            "post": {
-                "description": "Triggers a non-blocking background refresh of car listings from Bonhams. Game continues normally during refresh.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Manually refresh car listings",
-                "responses": {
-                    "200": {
-                        "description": "message: refresh started, status: refreshing, note: game continues normally",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/test-scraper": {
-            "get": {
-                "description": "Tests the AutoTrader scraper and returns up to 10 cars with full details",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "debug"
-                ],
-                "summary": "Test the car scraper directly",
-                "responses": {
-                    "200": {
-                        "description": "message, count, and cars array",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
                     },
-                    "500": {
-                        "description": "error and message",
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -574,6 +702,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "location": {
+                    "description": "Vehicle location e.g. \"Bournemouth, Dorset, United Kingdom\"",
+                    "type": "string"
+                },
                 "make": {
                     "type": "string"
                 },
@@ -601,6 +733,10 @@ const docTemplate = `{
                 "registration": {
                     "type": "string"
                 },
+                "saleDate": {
+                    "description": "Sale date in format \"29 Jul 2025\"",
+                    "type": "string"
+                },
                 "seats": {
                     "type": "string"
                 },
@@ -625,7 +761,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "zero",
-                        "streak"
+                        "streak",
+                        "challenge"
                     ]
                 },
                 "guessedPrice": {
@@ -687,38 +824,24 @@ const docTemplate = `{
             }
         }
     },
-    "tags": [
-        {
-            "description": "Core game endpoints for different game modes",
-            "name": "game"
-        },
-        {
-            "description": "Challenge Mode - GeoGuessr style scoring with 10 cars",
-            "name": "challenge"
-        },
-        {
-            "description": "Car listing management and data access",
-            "name": "listings"
-        },
-        {
-            "description": "Administrative functions for cache and refresh",
-            "name": "admin"
-        },
-        {
-            "description": "Debug and monitoring endpoints",
-            "name": "debug"
+    "securityDefinitions": {
+        "AdminKey": {
+            "description": "Admin API key required for administrative endpoints. Can also be passed as 'admin_key' query parameter.",
+            "type": "apiKey",
+            "name": "X-Admin-Key",
+            "in": "header"
         }
-    ]
+    }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "2.0",
+	Version:          "2.1",
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "Motors Price Guesser API",
-	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data",
+	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

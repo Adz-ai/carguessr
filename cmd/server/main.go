@@ -1,7 +1,7 @@
 // Motors Price Guesser Game API
 // @title Motors Price Guesser API
-// @version 2.0
-// @description A fun car price guessing game with multiple game modes using real Bonhams Car Auction data
+// @version 2.1
+// @description A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.
 // @termsOfService https://github.com/your-repo/motors-price-guesser
 //
 // @contact.name Motors Price Guesser Support
@@ -14,33 +14,40 @@
 // @BasePath /
 // @schemes http https
 //
+// @securityDefinitions.apikey AdminKey
+// @in header
+// @name X-Admin-Key
+// @description Admin API key required for administrative endpoints. Can also be passed as 'admin_key' query parameter.
+//
 // @tag.name game
-// @tag.description Core game endpoints for different game modes
+// @tag.description Core game endpoints for different game modes (Rate limited: 60 req/min)
 // @tag.name challenge
-// @tag.description Challenge Mode - GeoGuessr style scoring with 10 cars
-// @tag.name listings
-// @tag.description Car listing management and data access
+// @tag.description Challenge Mode - GeoGuessr style scoring with 10 cars (Rate limited: 60 req/min)
 // @tag.name admin
-// @tag.description Administrative functions for cache and refresh
-// @tag.name debug
-// @tag.description Debug and monitoring endpoints
+// @tag.description Administrative functions requiring authentication (Rate limited: 2 req/min)
+// @tag.name public
+// @tag.description Public endpoints with general rate limiting
 
 package main
 
 import (
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"golang.org/x/time/rate"
 
 	_ "autotraderguesser/docs"
 	"autotraderguesser/internal/game"
+	"autotraderguesser/internal/middleware"
 )
 
 func main() {
@@ -71,11 +78,29 @@ func main() {
 	config.MaxAge = 12 * 3600
 	r.Use(cors.New(config))
 
+	// Add security headers
+	r.Use(middleware.SecurityHeaders())
+
 	// Add request logging middleware for debugging
 	r.Use(func(c *gin.Context) {
 		log.Printf("Request: %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 		c.Next()
 	})
+
+	// Create rate limiters
+	// General API rate limiter: 60 requests per minute
+	generalLimiter := middleware.NewRateLimiter(rate.Limit(1), 60) // 1 request/second, burst of 60
+
+	// Strict rate limiter for expensive operations: 2 requests per minute
+	strictLimiter := middleware.NewRateLimiter(rate.Limit(0.033), 2) // 2 requests/minute
+
+	// Get admin key from environment or use a default (should be changed in production)
+	adminKey := os.Getenv("ADMIN_KEY")
+	if adminKey == "" {
+		adminKey = "change-this-in-production-" + strings.ToUpper(strings.ReplaceAll(generateSessionID(), "-", ""))
+		log.Printf("⚠️  No ADMIN_KEY set in environment. Generated temporary key: %s", adminKey)
+		log.Println("⚠️  Please set ADMIN_KEY environment variable for production use!")
+	}
 
 	// Serve static files with no-cache headers to prevent Cloudflare caching issues
 	r.Use(func(c *gin.Context) {
@@ -99,27 +124,37 @@ func main() {
 		log.Println("📚 Swagger documentation available at /swagger/index.html")
 	}
 
-	// API routes
+	// Public API routes with general rate limiting
 	api := r.Group("/api")
+	api.Use(middleware.RateLimitMiddleware(generalLimiter))
 	{
+		// Game endpoints
 		api.GET("/random-listing", gameHandler.GetRandomListing)
 		api.GET("/random-enhanced-listing", gameHandler.GetRandomEnhancedListing)
 		api.POST("/check-guess", gameHandler.CheckGuess)
 		api.GET("/leaderboard", gameHandler.GetLeaderboard)
-		api.GET("/listings", gameHandler.GetAllListings)
-		api.GET("/test-scraper", gameHandler.TestScraper)
 		api.GET("/data-source", gameHandler.GetDataSource)
-		api.POST("/refresh-listings", gameHandler.ManualRefresh)
-		api.GET("/cache-status", gameHandler.GetCacheStatus)
 
 		// Challenge Mode routes
 		api.POST("/challenge/start", gameHandler.StartChallenge)
 		api.GET("/challenge/:sessionId", gameHandler.GetChallengeSession)
 		api.POST("/challenge/:sessionId/guess", gameHandler.SubmitChallengeGuess)
 
+		// Health check (no additional rate limiting)
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
+	}
+
+	// Admin routes - protected with admin key and strict rate limiting
+	admin := r.Group("/api/admin")
+	admin.Use(middleware.AdminKeyMiddleware(adminKey))
+	admin.Use(middleware.RateLimitMiddleware(strictLimiter))
+	{
+		admin.POST("/refresh-listings", middleware.RefreshProtectionMiddleware(), gameHandler.ManualRefresh)
+		admin.GET("/cache-status", gameHandler.GetCacheStatus)
+		admin.GET("/listings", gameHandler.GetAllListings)
+		admin.GET("/test-scraper", gameHandler.TestScraper)
 	}
 
 	// Get port from environment or use default
@@ -132,4 +167,15 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// generateSessionID creates a random session ID
+func generateSessionID() string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }

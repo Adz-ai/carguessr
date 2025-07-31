@@ -96,6 +96,26 @@ function displayCar(car) {
 
         // Handle enhanced Bonhams characteristics
         if (car.auctionDetails) {
+            // Show sale date if available
+            const saleDateRow = document.getElementById('saleDateRow');
+            const saleDateElement = document.getElementById('carSaleDate');
+            if (car.saleDate) {
+                saleDateElement.textContent = car.saleDate;
+                saleDateRow.style.display = 'flex';
+            } else {
+                saleDateRow.style.display = 'none';
+            }
+
+            // Show location if available
+            const locationRow = document.getElementById('locationRow');
+            const locationElement = document.getElementById('carLocation');
+            if (car.location) {
+                locationElement.textContent = car.location;
+                locationRow.style.display = 'flex';
+            } else {
+                locationRow.style.display = 'none';
+            }
+
             // Show interior color if available
             const interiorColorRow = document.getElementById('interiorColorRow');
             const interiorColorElement = document.getElementById('carInteriorColor');
@@ -136,6 +156,8 @@ function displayCar(car) {
             }
         } else {
             // Hide enhanced sections for standard cars
+            document.getElementById('saleDateRow').style.display = 'none';
+            document.getElementById('locationRow').style.display = 'none';
             document.getElementById('interiorColorRow').style.display = 'none';
             document.getElementById('steeringRow').style.display = 'none';
             document.getElementById('auctionDetailsSection').style.display = 'none';
