@@ -148,6 +148,7 @@ func main() {
 		api.GET("/random-enhanced-listing", gameHandler.GetRandomEnhancedListing)
 		api.POST("/check-guess", gameHandler.CheckGuess)
 		api.GET("/leaderboard", gameHandler.GetLeaderboard)
+		api.POST("/leaderboard/submit", gameHandler.SubmitScore)
 		api.GET("/data-source", gameHandler.GetDataSource)
 
 		// Challenge Mode routes
@@ -168,6 +169,7 @@ func main() {
 	{
 		admin.POST("/refresh-listings", middleware.RefreshProtectionMiddleware(), gameHandler.ManualRefresh)
 		admin.GET("/cache-status", gameHandler.GetCacheStatus)
+		admin.GET("/leaderboard-status", gameHandler.GetLeaderboardStatus)
 		admin.GET("/listings", gameHandler.GetAllListings)
 		admin.GET("/test-scraper", gameHandler.TestScraper)
 	}

@@ -9,12 +9,16 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"autotraderguesser/internal/cache"
+	"autotraderguesser/internal/leaderboard"
 	"autotraderguesser/internal/models"
 	"autotraderguesser/internal/scraper"
 )
@@ -44,6 +48,9 @@ func NewHandler() *Handler {
 
 	// Initialize with cached or fresh data
 	h.initializeListings()
+
+	// Load leaderboard from persistent storage
+	h.initializeLeaderboard()
 
 	// Start automatic refresh timer (every 7 days)
 	h.startAutoRefresh()
@@ -223,10 +230,11 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 
 // GetLeaderboard godoc
 // @Summary Get the game leaderboard
-// @Description Returns the leaderboard optionally filtered by game mode
+// @Description Returns the leaderboard optionally filtered by game mode, sorted by score (descending for challenge, ascending for streak)
 // @Tags game
 // @Produce json
-// @Param mode query string false "Game mode filter (zero or streak)"
+// @Param mode query string false "Game mode filter (streak or challenge)"
+// @Param limit query int false "Maximum number of entries to return (default: 10)"
 // @Success 200 {array} models.LeaderboardEntry
 // @Router /api/leaderboard [get]
 func (h *Handler) GetLeaderboard(c *gin.Context) {
@@ -234,6 +242,14 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	defer h.mu.RUnlock()
 
 	gameMode := c.Query("mode")
+	limit := 10 // Default limit
+
+	// Parse limit if provided
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l := parseInt(limitStr); l > 0 && l <= 100 {
+			limit = l
+		}
+	}
 
 	// Filter leaderboard by game mode if specified
 	filtered := make([]models.LeaderboardEntry, 0)
@@ -243,7 +259,103 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 		}
 	}
 
+	// Sort by score - challenge mode: highest first, streak mode: highest first
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Score > filtered[j].Score
+	})
+
+	// Apply limit
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
 	c.JSON(http.StatusOK, filtered)
+}
+
+// SubmitScore godoc
+// @Summary Submit a score to the leaderboard
+// @Description Submit a score to the leaderboard for streak or challenge mode. Validates the score against the session data.
+// @Tags game
+// @Accept json
+// @Produce json
+// @Param submission body models.LeaderboardSubmissionRequest true "Score submission data"
+// @Success 200 {object} map[string]interface{} "success message and leaderboard position"
+// @Failure 400 {object} map[string]string "error: Invalid request or score validation failed"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
+// @Router /api/leaderboard/submit [post]
+func (h *Handler) SubmitScore(c *gin.Context) {
+	var req models.LeaderboardSubmissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format", "details": err.Error()})
+		return
+	}
+
+	// Validate name (additional server-side validation)
+	if len(req.Name) == 0 || len(req.Name) > 20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Name must be between 1 and 20 characters"})
+		return
+	}
+
+	// Sanitize name (remove any potentially harmful content)
+	req.Name = sanitizeName(req.Name)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Validate score for challenge mode by checking the session
+	if req.GameMode == "challenge" && req.SessionID != "" {
+		if session, exists := h.challengeSessions[req.SessionID]; exists {
+			if !session.IsComplete {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Challenge session is not complete"})
+				return
+			}
+			if session.TotalScore != req.Score {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Score does not match session data"})
+				return
+			}
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID"})
+			return
+		}
+	}
+
+	// For streak mode, we'll trust the submitted score for now
+	// In a production environment, you'd want to validate this against session data too
+
+	// Create leaderboard entry
+	entry := models.LeaderboardEntry{
+		Name:     req.Name,
+		Score:    req.Score,
+		GameMode: req.GameMode,
+		Date:     time.Now().Format("2006-01-02 15:04:05"),
+		ID:       generateSessionID(),
+	}
+
+	// Add to leaderboard
+	h.leaderboard = append(h.leaderboard, entry)
+
+	// Sort leaderboard by score (highest first)
+	sort.Slice(h.leaderboard, func(i, j int) bool {
+		if h.leaderboard[i].GameMode != h.leaderboard[j].GameMode {
+			return h.leaderboard[i].GameMode < h.leaderboard[j].GameMode
+		}
+		return h.leaderboard[i].Score > h.leaderboard[j].Score
+	})
+
+	// Keep only top 100 entries per game mode to prevent memory issues
+	h.trimLeaderboard()
+
+	// Save to persistent storage
+	h.saveLeaderboard()
+
+	// Find position in leaderboard
+	position := h.findLeaderboardPosition(entry)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Score submitted successfully!",
+		"position": position,
+		"entry":    entry,
+	})
 }
 
 // TestScraper godoc
@@ -813,4 +925,128 @@ func isValidSessionID(id string) bool {
 
 	validID := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 	return validID.MatchString(id)
+}
+
+// sanitizeName removes potentially harmful content from names
+func sanitizeName(name string) string {
+	// Remove any HTML/JS content and limit to basic characters
+	validName := regexp.MustCompile(`[^a-zA-Z0-9\s\-_.]`)
+	return validName.ReplaceAllString(strings.TrimSpace(name), "")
+}
+
+// parseInt safely parses an integer string
+func parseInt(s string) int {
+	if i, err := strconv.Atoi(s); err == nil {
+		return i
+	}
+	return 0
+}
+
+// trimLeaderboard keeps only top 100 entries per game mode
+func (h *Handler) trimLeaderboard() {
+	if len(h.leaderboard) <= 100 {
+		return
+	}
+
+	// Group by game mode
+	modeGroups := make(map[string][]models.LeaderboardEntry)
+	for _, entry := range h.leaderboard {
+		modeGroups[entry.GameMode] = append(modeGroups[entry.GameMode], entry)
+	}
+
+	// Keep top 50 per mode
+	h.leaderboard = make([]models.LeaderboardEntry, 0)
+	for _, entries := range modeGroups {
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].Score > entries[j].Score
+		})
+
+		limit := 50
+		if len(entries) < limit {
+			limit = len(entries)
+		}
+
+		h.leaderboard = append(h.leaderboard, entries[:limit]...)
+	}
+}
+
+// findLeaderboardPosition finds the position of an entry in the sorted leaderboard
+func (h *Handler) findLeaderboardPosition(entry models.LeaderboardEntry) int {
+	for i, e := range h.leaderboard {
+		if e.ID == entry.ID {
+			return i + 1
+		}
+	}
+	return -1
+}
+
+// initializeLeaderboard loads leaderboard from persistent storage
+func (h *Handler) initializeLeaderboard() {
+	if entries, err := leaderboard.LoadFromFile(); err == nil {
+		h.leaderboard = entries
+		fmt.Printf("📊 Loaded %d leaderboard entries from file\n", len(entries))
+
+		if leaderboard.FileExists() {
+			if age, err := leaderboard.GetFileAge(); err == nil {
+				fmt.Printf("📊 Leaderboard file age: %s\n", age.Round(time.Minute))
+			}
+		}
+	} else {
+		fmt.Printf("📊 No existing leaderboard found, starting fresh: %v\n", err)
+		h.leaderboard = make([]models.LeaderboardEntry, 0)
+	}
+}
+
+// saveLeaderboard saves leaderboard to persistent storage
+func (h *Handler) saveLeaderboard() {
+	if err := leaderboard.SaveToFile(h.leaderboard); err != nil {
+		fmt.Printf("⚠️ Failed to save leaderboard: %v\n", err)
+	}
+}
+
+// GetLeaderboardStatus godoc
+// @Summary Get leaderboard status information (Admin Only)
+// @Description Returns information about the leaderboard file, entry counts, and storage details. Requires admin authentication.
+// @Tags admin
+// @Security AdminKey
+// @Produce json
+// @Success 200 {object} map[string]interface{} "leaderboard status information"
+// @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
+// @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
+// @Router /api/admin/leaderboard-status [get]
+func (h *Handler) GetLeaderboardStatus(c *gin.Context) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// Count entries by game mode
+	challengeCount := 0
+	streakCount := 0
+	for _, entry := range h.leaderboard {
+		switch entry.GameMode {
+		case "challenge":
+			challengeCount++
+		case "streak":
+			streakCount++
+		}
+	}
+
+	status := gin.H{
+		"total_entries":     len(h.leaderboard),
+		"challenge_entries": challengeCount,
+		"streak_entries":    streakCount,
+		"file_exists":       leaderboard.FileExists(),
+	}
+
+	if leaderboard.FileExists() {
+		if age, err := leaderboard.GetFileAge(); err == nil {
+			status["file_age"] = age.Round(time.Minute).String()
+			status["file_age_hours"] = age.Hours()
+		}
+
+		if path, err := leaderboard.GetAbsolutePath(); err == nil {
+			status["file_path"] = path
+		}
+	}
+
+	c.JSON(http.StatusOK, status)
 }

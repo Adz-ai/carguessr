@@ -5,7 +5,8 @@ let currentGame = {
     score: 0,
     sessionId: generateSessionId(),
     challengeSession: null,
-    challengeGuesses: []
+    challengeGuesses: [],
+    pendingLeaderboardData: null // Store data for leaderboard submission
 };
 
 // Generate a session ID for tracking scores
@@ -703,6 +704,16 @@ document.addEventListener('DOMContentLoaded', () => {
     priceGuess.addEventListener('input', syncInputToSlider);
     priceSlider.addEventListener('input', syncSliderToInput);
     
+    // Allow Enter key to submit name in leaderboard modal
+    const playerNameInput = document.getElementById('playerName');
+    if (playerNameInput) {
+        playerNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitToLeaderboard();
+            }
+        });
+    }
+    
     // Add smooth scrolling
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
@@ -714,3 +725,211 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+// Leaderboard Functions
+
+// Show name input modal for leaderboard submission
+function showNameInputModal(gameMode) {
+    // Store the leaderboard data
+    let score = 0;
+    let sessionId = null;
+    
+    if (gameMode === 'challenge') {
+        if (currentGame.challengeSession) {
+            score = currentGame.challengeSession.totalScore;
+            sessionId = currentGame.challengeSession.sessionId;
+        }
+    } else if (gameMode === 'streak') {
+        score = currentGame.score;
+        sessionId = currentGame.sessionId;
+    }
+    
+    currentGame.pendingLeaderboardData = {
+        gameMode: gameMode,
+        score: score,
+        sessionId: sessionId
+    };
+    
+    // Hide current modal
+    document.getElementById('challengeCompleteModal').style.display = 'none';
+    document.getElementById('gameOverModal').style.display = 'none';
+    
+    // Show name input modal
+    document.getElementById('nameInputModal').style.display = 'flex';
+    
+    // Focus on the name input
+    setTimeout(() => {
+        document.getElementById('playerName').focus();
+    }, 100);
+}
+
+// Show name input modal from game over (streak mode)
+function showNameInputModalFromGameOver() {
+    showNameInputModal('streak');
+}
+
+// Submit score to leaderboard
+async function submitToLeaderboard() {
+    const nameInput = document.getElementById('playerName');
+    const name = nameInput.value.trim();
+    
+    if (!name) {
+        nameInput.style.animation = 'shake 0.5s';
+        setTimeout(() => nameInput.style.animation = '', 500);
+        return;
+    }
+    
+    if (name.length > 20) {
+        alert('Name must be 20 characters or less');
+        return;
+    }
+    
+    if (!currentGame.pendingLeaderboardData) {
+        alert('No score data available');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/leaderboard/submit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name,
+                score: currentGame.pendingLeaderboardData.score,
+                gameMode: currentGame.pendingLeaderboardData.gameMode,
+                sessionId: currentGame.pendingLeaderboardData.sessionId || ''
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to submit score');
+        }
+        
+        const result = await response.json();
+        
+        // Hide name input modal
+        document.getElementById('nameInputModal').style.display = 'none';
+        
+        // Show success message and leaderboard
+        showLeaderboardWithHighlight(result.entry, result.position);
+        
+    } catch (error) {
+        console.error('Error submitting score:', error);
+        alert('Failed to submit score: ' + error.message);
+    }
+}
+
+// Skip leaderboard submission
+function skipLeaderboard() {
+    document.getElementById('nameInputModal').style.display = 'none';
+    currentGame.pendingLeaderboardData = null;
+    // Go back to main menu
+    location.reload();
+}
+
+// Open leaderboard modal
+function openLeaderboard() {
+    document.getElementById('leaderboardModal').style.display = 'flex';
+    showLeaderboard('challenge'); // Default to challenge mode
+}
+
+// Close leaderboard modal
+function closeLeaderboard() {
+    document.getElementById('leaderboardModal').style.display = 'none';
+}
+
+// Show leaderboard for specific game mode
+async function showLeaderboard(gameMode) {
+    // Update tab states
+    document.getElementById('challengeTab').classList.remove('active');
+    document.getElementById('streakTab').classList.remove('active');
+    document.getElementById(gameMode + 'Tab').classList.add('active');
+    
+    // Show loading
+    const contentArea = document.getElementById('leaderboardContent');
+    contentArea.innerHTML = '<div class="leaderboard-empty">Loading...</div>';
+    
+    try {
+        const response = await fetch(`/api/leaderboard?mode=${gameMode}&limit=10`);
+        if (!response.ok) throw new Error('Failed to load leaderboard');
+        
+        const entries = await response.json();
+        displayLeaderboardEntries(entries, gameMode);
+        
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        contentArea.innerHTML = '<div class="leaderboard-empty">Failed to load leaderboard</div>';
+    }
+}
+
+// Display leaderboard entries
+function displayLeaderboardEntries(entries, gameMode) {
+    const contentArea = document.getElementById('leaderboardContent');
+    
+    if (entries.length === 0) {
+        contentArea.innerHTML = `
+            <div class="leaderboard-empty">
+                No scores yet for ${gameMode} mode.<br>
+                Be the first to set a record!
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    entries.forEach((entry, index) => {
+        const rank = index + 1;
+        const isTop3 = rank <= 3;
+        const scoreText = gameMode === 'challenge' ? `${entry.score.toLocaleString()} pts` : `${entry.score} streak`;
+        const date = new Date(entry.date).toLocaleDateString();
+        
+        html += `
+            <div class="leaderboard-entry ${isTop3 ? 'top-3' : ''}">
+                <div class="leaderboard-rank ${isTop3 ? 'top-3' : ''}">${getRankDisplay(rank)}</div>
+                <div class="leaderboard-name">${escapeHtml(entry.name)}</div>
+                <div class="leaderboard-score">${scoreText}</div>
+                <div class="leaderboard-date">${date}</div>
+            </div>
+        `;
+    });
+    
+    contentArea.innerHTML = html;
+}
+
+// Show leaderboard with highlighted entry
+async function showLeaderboardWithHighlight(entry, position) {
+    document.getElementById('leaderboardModal').style.display = 'flex';
+    
+    // Show the appropriate tab
+    showLeaderboard(entry.gameMode);
+    
+    // Wait a bit for the leaderboard to load, then highlight the entry
+    setTimeout(() => {
+        const entries = document.querySelectorAll('.leaderboard-entry');
+        if (entries[position - 1]) {
+            entries[position - 1].style.background = 'linear-gradient(135deg, rgba(32, 178, 170, 0.3) 0%, rgba(65, 105, 225, 0.3) 100%)';
+            entries[position - 1].style.borderColor = '#20b2aa';
+            entries[position - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 500);
+}
+
+// Get rank display with emojis for top 3
+function getRankDisplay(rank) {
+    switch (rank) {
+        case 1: return '🥇';
+        case 2: return '🥈';
+        case 3: return '🥉';
+        default: return `#${rank}`;
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

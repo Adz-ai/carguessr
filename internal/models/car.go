@@ -201,8 +201,17 @@ type ChallengeResponse struct {
 
 // LeaderboardEntry represents a high score entry
 type LeaderboardEntry struct {
-	Name     string `json:"name"`
+	Name     string `json:"name" binding:"required,min=1,max=20"`
 	Score    int    `json:"score"`
 	GameMode string `json:"gameMode"`
 	Date     string `json:"date"`
+	ID       string `json:"id,omitempty"`
+}
+
+// LeaderboardSubmissionRequest represents a request to submit a score to the leaderboard
+type LeaderboardSubmissionRequest struct {
+	Name      string `json:"name" binding:"required,min=1,max=20"`
+	Score     int    `json:"score" binding:"required,min=0"`
+	GameMode  string `json:"gameMode" binding:"required,oneof=streak challenge"`
+	SessionID string `json:"sessionId,omitempty"`
 }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motors Price Guesser</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/styles.css?v=3.0">
 </head>
 <body>
     <!-- Home Button -->
@@ -23,6 +23,9 @@
                 <span id="scoreLabel">Score: </span>
                 <span id="scoreValue">0</span>
             </div>
+            <button onclick="openLeaderboard()" class="leaderboard-button" title="View Leaderboard">
+                🏆 Leaderboard
+            </button>
             <div id="dataSourceInfo" style="font-size: 0.8em; color: #666; margin-top: 5px;"></div>
         </header>
 
@@ -165,6 +168,7 @@
                 <h2>Game Over!</h2>
                 <p id="finalScore" class="final-score"></p>
                 <div class="modal-buttons">
+                    <button onclick="showNameInputModalFromGameOver()" class="submit-score-button" id="submitStreakScore">Submit to Leaderboard</button>
                     <button onclick="location.reload()" class="play-again-button">Play Again</button>
                 </div>
             </div>
@@ -180,12 +184,48 @@
                     <div id="challengeResults" class="challenge-results"></div>
                 </div>
                 <div class="modal-buttons">
+                    <button onclick="showNameInputModal('challenge')" class="submit-score-button">Submit to Leaderboard</button>
                     <button onclick="location.reload()" class="play-again-button">New Challenge</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Name Input Modal -->
+        <div id="nameInputModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>🎉 Great Score!</h2>
+                <p>Enter your name for the leaderboard:</p>
+                <div class="name-input-container">
+                    <input type="text" id="playerName" placeholder="Enter your name" maxlength="20" class="name-input">
+                    <div class="name-help">
+                        <small>Maximum 20 characters</small>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="submitToLeaderboard()" class="submit-button">Submit Score</button>
+                    <button onclick="skipLeaderboard()" class="skip-button">Skip</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Modal -->
+        <div id="leaderboardModal" class="modal" style="display: none;">
+            <div class="modal-content leaderboard-content">
+                <h2>🏆 Leaderboard</h2>
+                <div class="leaderboard-tabs">
+                    <button onclick="showLeaderboard('challenge')" class="tab-button active" id="challengeTab">Challenge Mode</button>
+                    <button onclick="showLeaderboard('streak')" class="tab-button" id="streakTab">Streak Mode</button>
+                </div>
+                <div id="leaderboardContent" class="leaderboard-content-area">
+                    <!-- Leaderboard entries will be loaded here -->
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="closeLeaderboard()" class="close-button">Close</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="/static/js/game.js?v=2.0"></script>
+    <script src="/static/js/game.js?v=3.0"></script>
 </body>
 </html>

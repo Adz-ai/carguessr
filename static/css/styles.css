@@ -764,6 +764,12 @@ header h1 {
         display: inline-block;
     }
     
+    .leaderboard-button {
+        position: static;
+        margin-top: 15px;
+        display: inline-block;
+    }
+    
     .car-display {
         grid-template-columns: 1fr;
     }
@@ -786,18 +792,49 @@ header h1 {
         font-size: 1.4rem;
     }
     
+    .name-input {
+        width: 250px;
+        font-size: 1.1rem;
+    }
+    
     .modal-buttons {
         flex-direction: column;
         width: 100%;
     }
     
-    .next-button, .end-button, .play-again-button {
+    .next-button, .end-button, .play-again-button, .submit-score-button, .skip-button, .close-button {
         width: 100%;
+        margin: 5px 0;
     }
     
     .thumbnail {
         width: 70px;
         height: 55px;
+    }
+    
+    .leaderboard-tabs {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .tab-button {
+        width: 100%;
+    }
+    
+    .leaderboard-entry {
+        flex-direction: column;
+        text-align: center;
+        padding: 12px 15px;
+    }
+    
+    .leaderboard-rank, .leaderboard-name, .leaderboard-score {
+        margin: 3px 0;
+    }
+    
+    .leaderboard-date {
+        margin: 3px 0 0 0;
+        min-width: auto;
+        text-align: center;
     }
 }
 
@@ -955,4 +992,210 @@ header h1 {
     height: 100%;
     transition: width 0.3s ease;
     border-radius: 4px;
+}
+
+/* Leaderboard Styling */
+.leaderboard-button {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    color: #20b2aa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.leaderboard-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(32, 178, 170, 0.4);
+}
+
+.leaderboard-content {
+    max-width: 600px;
+    width: 95%;
+}
+
+.leaderboard-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.tab-button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0a0;
+    padding: 12px 24px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.tab-button.active {
+    background: linear-gradient(135deg, #20b2aa 0%, #4169e1 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(32, 178, 170, 0.4);
+}
+
+.tab-button:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.leaderboard-content-area {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.leaderboard-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.leaderboard-entry:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(5px);
+}
+
+.leaderboard-entry.top-3 {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 165, 0, 0.1) 100%);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+
+.leaderboard-rank {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #20b2aa;
+    min-width: 40px;
+}
+
+.leaderboard-rank.top-3 {
+    color: #ffd700;
+}
+
+.leaderboard-name {
+    flex: 1;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 15px;
+}
+
+.leaderboard-score {
+    font-weight: bold;
+    color: #20b2aa;
+    font-size: 1.1rem;
+}
+
+.leaderboard-date {
+    font-size: 0.8rem;
+    color: #a0a0a0;
+    margin-left: 15px;
+    min-width: 120px;
+    text-align: right;
+}
+
+.leaderboard-empty {
+    text-align: center;
+    color: #a0a0a0;
+    padding: 40px 20px;
+    font-style: italic;
+}
+
+/* Name Input Styling */
+.name-input-container {
+    margin: 25px 0;
+    text-align: center;
+}
+
+.name-input {
+    width: 300px;
+    max-width: 100%;
+    padding: 15px;
+    font-size: 1.2rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(32, 178, 170, 0.3);
+    border-radius: 12px;
+    text-align: center;
+    outline: none;
+    color: #fff;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.name-input:focus {
+    border-color: #20b2aa;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 20px rgba(32, 178, 170, 0.3);
+    transform: scale(1.02);
+}
+
+.name-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.name-help {
+    margin-top: 8px;
+}
+
+.name-help small {
+    color: #a0a0a0;
+    font-size: 0.8rem;
+}
+
+.submit-score-button {
+    background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+    color: #333;
+    border: none;
+    padding: 14px 35px;
+    font-size: 1.1rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);
+}
+
+.submit-score-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(255, 215, 0, 0.6);
+}
+
+.skip-button, .close-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 14px 35px;
+    font-size: 1.1rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.skip-button:hover, .close-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
 }
