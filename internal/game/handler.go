@@ -148,7 +148,7 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 	log.Printf("CheckGuess: Received request - ListingID: %s, GuessedPrice: %.2f, GameMode: %s",
 		req.ListingID, req.GuessedPrice, req.GameMode)
 
-	// Additional security validation
+	// Additional security validation - allow higher values via text input
 	if req.GuessedPrice > 10000000 { // £10 million max
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
 		return
@@ -663,7 +663,7 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		return
 	}
 
-	// Additional security validation
+	// Additional security validation - allow higher values via text input
 	if req.GuessedPrice > 10000000 { // £10 million max
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
 		return

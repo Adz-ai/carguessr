@@ -269,7 +269,15 @@ header h1 {
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     margin-bottom: 15px;
-    transition: transform 0.3s ease;
+    transition: all 0.3s ease;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: high-quality;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .main-car-image:hover {
@@ -295,6 +303,14 @@ header h1 {
     transition: all 0.3s ease;
     border: 2px solid transparent;
     flex-shrink: 0;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: high-quality;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .thumbnail:hover {
@@ -436,7 +452,11 @@ header h1 {
     height: 12px;
     -webkit-appearance: none;
     appearance: none;
-    background: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(to right, 
+        #20b2aa 0%, 
+        #20b2aa 50%, 
+        #4169e1 50%, 
+        #4169e1 100%);
     border-radius: 10px;
     outline: none;
     position: relative;
@@ -467,6 +487,27 @@ header h1 {
     color: #a0a0a0;
     font-size: 0.9rem;
     font-weight: 500;
+    position: relative;
+}
+
+.slider-labels .mid-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #20b2aa;
+    font-weight: 600;
+}
+
+.slider-help {
+    text-align: center;
+    margin: 10px auto 0;
+    max-width: 600px;
+}
+
+.slider-help small {
+    color: #666;
+    font-size: 0.8rem;
+    font-style: italic;
 }
 
 .submit-button {

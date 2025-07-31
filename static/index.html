@@ -123,10 +123,14 @@
                     <input type="text" id="priceGuess" class="price-input" placeholder="Enter price">
                 </div>
                 <div class="price-slider-container">
-                    <input type="range" id="priceSlider" class="price-slider" min="0" max="1000000" step="1000">
+                    <input type="range" id="priceSlider" class="price-slider" min="0" max="100" step="1">
                     <div class="slider-labels">
                         <span>£0</span>
-                        <span>£1,000,000</span>
+                        <span class="mid-label">£100k</span>
+                        <span>£500k</span>
+                    </div>
+                    <div class="slider-help">
+                        <small>Left half: £0-£100k • Right half: £100k-£500k</small>
                     </div>
                 </div>
                 <button id="submitGuess" class="submit-button" onclick="submitGuess()">Submit Guess</button>

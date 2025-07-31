@@ -62,7 +62,7 @@ async function loadNextCar() {
         
         // Reset guess inputs to be synchronized
         document.getElementById('priceGuess').value = '';
-        document.getElementById('priceSlider').value = 50000; // Set to a reasonable middle value
+        document.getElementById('priceSlider').value = 25; // Set to £50k (middle of first range)
         
     } catch (error) {
         console.error('Error loading car:', error);
@@ -180,6 +180,26 @@ function displayCar(car) {
     }, 100);
 }
 
+// Enhance image URL for better quality
+function enhanceImageUrl(url) {
+    // For imgix URLs, add quality and size parameters
+    if (url.includes('imgix')) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}w=800&h=600&fit=crop&auto=format,enhance&q=85`;
+    }
+    
+    // For amazonaws URLs, try to get larger versions
+    if (url.includes('amazonaws')) {
+        // Remove any existing size constraints and add high quality params
+        let cleanUrl = url.replace(/\/\d+x\d+\//, '/').replace(/[?&]w=\d+/, '').replace(/[?&]h=\d+/, '');
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        return `${cleanUrl}${separator}w=800&h=600&q=85`;
+    }
+    
+    // For other URLs, return as-is but try to remove small size constraints
+    return url.replace(/\/thumb\//, '/').replace(/\/small\//, '/').replace(/\/preview\//, '/');
+}
+
 // Set up image gallery with multiple photos
 function setupImageGallery(images) {
     const mainImage = document.getElementById('mainCarImage');
@@ -193,31 +213,86 @@ function setupImageGallery(images) {
         return;
     }
     
-    // Set main image with fade effect
+    // Enhance all image URLs for better quality
+    const enhancedImages = images.map(url => enhanceImageUrl(url));
+    
+    // Preload all images to prevent blurry loading
+    const imagePromises = enhancedImages.map(url => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve({ url, img });
+            img.onerror = () => reject(new Error(`Failed to load ${url}`));
+            img.src = url;
+        });
+    });
+    
+    // Set main image with proper loading
     mainImage.style.opacity = '0';
-    setTimeout(() => {
-        mainImage.src = images[0];
+    const firstImage = new Image();
+    firstImage.onload = () => {
+        mainImage.src = enhancedImages[0];
         mainImage.style.opacity = '1';
-    }, 200);
+    };
+    firstImage.onerror = () => {
+        // Fallback to original URL if enhanced version fails
+        const fallbackImage = new Image();
+        fallbackImage.onload = () => {
+            mainImage.src = images[0];
+            mainImage.style.opacity = '1';
+        };
+        fallbackImage.onerror = () => {
+            mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Not+Found';
+            mainImage.style.opacity = '1';
+        };
+        fallbackImage.src = images[0];
+    };
+    firstImage.src = enhancedImages[0];
     
     // Create thumbnails if more than one image
     if (images.length > 1) {
         images.forEach((imageUrl, index) => {
+            const enhancedUrl = enhancedImages[index];
             const thumbnail = document.createElement('img');
-            thumbnail.src = imageUrl;
-            thumbnail.className = 'thumbnail' + (index === 0 ? ' active' : '');
-            thumbnail.onclick = () => switchMainImage(imageUrl, thumbnail);
             
-            // Add staggered animation
+            // Add loading placeholder
+            thumbnail.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            thumbnail.className = 'thumbnail' + (index === 0 ? ' active' : '');
+            
+            // Ensure image loads properly before showing
+            thumbnail.onload = () => {
+                thumbnail.style.backgroundColor = '';
+                // Add staggered animation after image loads
+                setTimeout(() => {
+                    thumbnail.style.transition = 'all 0.3s ease';
+                    thumbnail.style.opacity = index === 0 ? '1' : '';
+                    thumbnail.style.transform = '';
+                }, 50 * index);
+            };
+            
+            thumbnail.onerror = () => {
+                // Fallback to original URL if enhanced version fails
+                const fallbackThumb = new Image();
+                fallbackThumb.onload = () => {
+                    thumbnail.src = imageUrl;
+                    thumbnail.style.backgroundColor = '';
+                };
+                fallbackThumb.onerror = () => {
+                    thumbnail.src = 'https://via.placeholder.com/90x70?text=Error';
+                    thumbnail.style.backgroundColor = '';
+                };
+                fallbackThumb.src = imageUrl;
+            };
+            
+            thumbnail.onclick = () => switchMainImage(enhancedUrl, thumbnail, imageUrl);
+            
+            // Set initial animation state
             thumbnail.style.opacity = '0';
             thumbnail.style.transform = 'translateY(20px)';
-            thumbnailStrip.appendChild(thumbnail);
             
-            setTimeout(() => {
-                thumbnail.style.transition = 'all 0.3s ease';
-                thumbnail.style.opacity = '';
-                thumbnail.style.transform = '';
-            }, 50 * index);
+            // Set the enhanced source after setting up event handlers
+            thumbnail.src = enhancedUrl;
+            
+            thumbnailStrip.appendChild(thumbnail);
         });
         
         // Show thumbnail strip
@@ -229,15 +304,50 @@ function setupImageGallery(images) {
 }
 
 // Switch main image when thumbnail clicked
-function switchMainImage(imageUrl, clickedThumbnail) {
+function switchMainImage(enhancedUrl, clickedThumbnail, originalUrl = null) {
     const mainImage = document.getElementById('mainCarImage');
     
-    // Fade out, change, fade in
-    mainImage.style.opacity = '0';
-    setTimeout(() => {
-        mainImage.src = imageUrl;
+    // Add loading state
+    mainImage.style.opacity = '0.3';
+    mainImage.style.filter = 'blur(2px)';
+    
+    // Preload the enhanced image to ensure it's crisp
+    const newImage = new Image();
+    newImage.onload = () => {
+        // Enhanced image is fully loaded, now switch
+        mainImage.src = enhancedUrl;
         mainImage.style.opacity = '1';
-    }, 200);
+        mainImage.style.filter = 'none';
+        mainImage.style.transition = 'all 0.3s ease';
+    };
+    
+    newImage.onerror = () => {
+        // Enhanced URL failed, try original URL if provided
+        if (originalUrl && originalUrl !== enhancedUrl) {
+            const fallbackImage = new Image();
+            fallbackImage.onload = () => {
+                mainImage.src = originalUrl;
+                mainImage.style.opacity = '1';
+                mainImage.style.filter = 'none';
+                mainImage.style.transition = 'all 0.3s ease';
+            };
+            fallbackImage.onerror = () => {
+                // Both URLs failed, show error placeholder
+                mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Error';
+                mainImage.style.opacity = '1';
+                mainImage.style.filter = 'none';
+            };
+            fallbackImage.src = originalUrl;
+        } else {
+            // No fallback available, show error
+            mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Error';
+            mainImage.style.opacity = '1';
+            mainImage.style.filter = 'none';
+        }
+    };
+    
+    // Start loading the enhanced image
+    newImage.src = enhancedUrl;
     
     // Update active thumbnail with smooth transition
     document.querySelectorAll('.thumbnail').forEach(thumb => {
@@ -248,6 +358,30 @@ function switchMainImage(imageUrl, clickedThumbnail) {
     clickedThumbnail.style.transform = 'scale(1.1)';
 }
 
+// Convert price to slider position (0-100)
+function priceToSlider(price) {
+    if (price <= 100000) {
+        // First half: £0-£100k maps to 0-50
+        return (price / 100000) * 50;
+    } else {
+        // Second half: £100k-£500k maps to 50-100
+        const priceAbove100k = Math.min(price - 100000, 400000);
+        return 50 + (priceAbove100k / 400000) * 50;
+    }
+}
+
+// Convert slider position (0-100) to price
+function sliderToPrice(sliderValue) {
+    if (sliderValue <= 50) {
+        // First half: 0-50 maps to £0-£100k
+        return (sliderValue / 50) * 100000;
+    } else {
+        // Second half: 50-100 maps to £100k-£500k
+        const extraValue = (sliderValue - 50) / 50;
+        return 100000 + (extraValue * 400000);
+    }
+}
+
 // Sync price input and slider with improved formatting
 function syncInputToSlider() {
     const input = document.getElementById('priceGuess');
@@ -256,10 +390,12 @@ function syncInputToSlider() {
     let value = input.value.replace(/,/g, ''); // Remove existing commas
     if (!isNaN(value) && value !== '') {
         const numValue = parseInt(value);
-        const clampedValue = Math.min(Math.max(numValue, 0), 1000000);
         
-        // Update slider
-        slider.value = clampedValue;
+        // Allow higher values in text input, but clamp slider to £500k max
+        const sliderValue = Math.min(Math.max(numValue, 0), 500000);
+        
+        // Update slider using non-linear mapping
+        slider.value = priceToSlider(sliderValue);
         
         // Format input with commas (but don't trigger another event)
         input.value = numValue.toLocaleString();
@@ -270,8 +406,9 @@ function syncSliderToInput() {
     const input = document.getElementById('priceGuess');
     const slider = document.getElementById('priceSlider');
     
-    const value = parseInt(slider.value);
-    input.value = value.toLocaleString();
+    const sliderValue = parseFloat(slider.value);
+    const price = Math.round(sliderToPrice(sliderValue));
+    input.value = price.toLocaleString();
 }
 
 
@@ -507,7 +644,7 @@ function loadChallengeAuto() {
     
     // Reset guess inputs
     document.getElementById('priceGuess').value = '';
-    document.getElementById('priceSlider').value = 50000;
+    document.getElementById('priceSlider').value = 25; // Set to £50k (middle of first range)
 }
 
 async function submitChallengeGuess(guessValue) {
