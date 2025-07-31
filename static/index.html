@@ -120,7 +120,10 @@
                 <h3>What's Your Price Guess?</h3>
                 <div class="price-input-container">
                     <span class="currency">£</span>
-                    <input type="text" id="priceGuess" class="price-input" placeholder="Enter price">
+                    <div class="price-input-wrapper">
+                        <input type="number" id="priceGuess" class="price-input" inputmode="numeric" pattern="[0-9]*" min="0" max="10000000" step="1">
+                        <div id="priceOverlay" class="price-overlay"></div>
+                    </div>
                 </div>
                 <div class="price-slider-container">
                     <input type="range" id="priceSlider" class="price-slider" min="0" max="100" step="1">

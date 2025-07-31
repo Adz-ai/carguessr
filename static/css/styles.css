@@ -413,6 +413,11 @@ header h1 {
     position: relative;
 }
 
+.price-input-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
 .currency {
     font-size: 2.5rem;
     color: #20b2aa;
@@ -429,8 +434,26 @@ header h1 {
     border-radius: 15px;
     text-align: center;
     outline: none;
-    color: #fff;
+    color: transparent; /* Hide the actual number */
     font-weight: 600;
+    transition: all 0.3s ease;
+    caret-color: #20b2aa; /* Keep the cursor visible */
+}
+
+.price-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #fff;
+    pointer-events: none; /* Allow clicks to pass through to input */
+    border-radius: 15px;
     transition: all 0.3s ease;
 }
 
@@ -439,6 +462,26 @@ header h1 {
     background: rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 30px rgba(32, 178, 170, 0.4);
     transform: scale(1.05);
+}
+
+.price-input:focus + .price-overlay {
+    transform: scale(1.05);
+}
+
+/* Hide any browser default placeholders for number inputs */
+.price-input::placeholder {
+    color: transparent;
+    opacity: 0;
+}
+
+.price-input::-webkit-input-placeholder {
+    color: transparent;
+    opacity: 0;
+}
+
+.price-input::-moz-placeholder {
+    color: transparent;
+    opacity: 0;
 }
 
 .price-slider-container {

@@ -61,8 +61,16 @@ async function loadNextCar() {
         displayCar(listing);
         
         // Reset guess inputs to be synchronized
-        document.getElementById('priceGuess').value = '';
+        const priceInput = document.getElementById('priceGuess');
+        const priceOverlay = document.getElementById('priceOverlay');
+        
+        priceInput.value = '';
         document.getElementById('priceSlider').value = 50; // Set to £50k (middle of first range)
+        
+        // Set placeholder styling
+        priceOverlay.textContent = 'Enter price';
+        priceOverlay.style.color = 'rgba(255, 255, 255, 0.5)';
+        priceOverlay.style.fontStyle = 'italic';
         
     } catch (error) {
         console.error('Error loading car:', error);
@@ -272,39 +280,52 @@ function sliderToPrice(sliderValue) {
     }
 }
 
-// Sync price input and slider with improved formatting
+// Sync price input and slider with beautiful overlay formatting
 function syncInputToSlider() {
     const input = document.getElementById('priceGuess');
     const slider = document.getElementById('priceSlider');
+    const overlay = document.getElementById('priceOverlay');
     
-    let value = input.value.replace(/,/g, ''); // Remove existing commas
+    let value = input.value;
     if (!isNaN(value) && value !== '') {
         const numValue = parseInt(value);
         
-        // Allow higher values in text input, but clamp slider to £500k max
+        // Allow higher values in number input, but clamp slider to £500k max
         const sliderValue = Math.min(Math.max(numValue, 0), 500000);
         
         // Update slider using non-linear mapping
         slider.value = priceToSlider(sliderValue);
         
-        // Format input with commas (but don't trigger another event)
-        input.value = numValue.toLocaleString();
+        // Show formatted price in overlay
+        overlay.textContent = numValue.toLocaleString();
+        overlay.style.color = '#fff';
+        overlay.style.fontStyle = 'normal';
+    } else {
+        overlay.textContent = 'Enter price';
+        overlay.style.color = 'rgba(255, 255, 255, 0.5)';
+        overlay.style.fontStyle = 'italic';
     }
 }
 
 function syncSliderToInput() {
     const input = document.getElementById('priceGuess');
     const slider = document.getElementById('priceSlider');
+    const overlay = document.getElementById('priceOverlay');
     
     const sliderValue = parseFloat(slider.value);
     const price = Math.round(sliderToPrice(sliderValue));
-    input.value = price.toLocaleString();
+    input.value = price;
+    
+    // Show formatted price in overlay
+    overlay.textContent = price.toLocaleString();
+    overlay.style.color = '#fff';
+    overlay.style.fontStyle = 'normal';
 }
 
 
 // Submit guess
 async function submitGuess() {
-    const guessInput = document.getElementById('priceGuess').value.replace(/,/g, ''); // Remove commas
+    const guessInput = document.getElementById('priceGuess').value; // Number input already gives us clean number
     const guessValue = parseInt(guessInput);
     const submitButton = document.querySelector('.submit-button');
     
@@ -533,8 +554,16 @@ function loadChallengeAuto() {
     displayCar(currentCar);
     
     // Reset guess inputs
-    document.getElementById('priceGuess').value = '';
+    const priceInput = document.getElementById('priceGuess');
+    const priceOverlay = document.getElementById('priceOverlay');
+    
+    priceInput.value = '';
     document.getElementById('priceSlider').value = 25; // Set to £50k (middle of first range)
+    
+    // Set placeholder styling
+    priceOverlay.textContent = 'Enter price';
+    priceOverlay.style.color = 'rgba(255, 255, 255, 0.5)';
+    priceOverlay.style.fontStyle = 'italic';
 }
 
 async function submitChallengeGuess(guessValue) {
