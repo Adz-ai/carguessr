@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,6 +77,7 @@ func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
 		l := limiter.GetLimiter(ip)
 
 		if !l.Allow() {
+			log.Printf("Rate limit exceeded for %s", ip)
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":   "Too many requests",
 				"message": "Please slow down your requests",
@@ -151,6 +154,39 @@ func AdminKeyMiddleware(adminKey string) gin.HandlerFunc {
 			})
 			c.Abort()
 			return
+		}
+
+		c.Next()
+	}
+}
+
+// SecurityScanDetection logs suspicious requests for fail2ban
+func SecurityScanDetection() gin.HandlerFunc {
+	suspiciousPaths := []string{
+		".env", ".git", ".DS_Store", "wp-admin", "admin", "phpmyadmin",
+		".htaccess", "config.php", "wp-config.php", ".ssh", "id_rsa",
+		"backup", ".bak", ".sql", "database", "credentials",
+	}
+
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		ip := c.ClientIP()
+
+		// Check for suspicious paths
+		for _, suspicious := range suspiciousPaths {
+			if strings.Contains(path, suspicious) {
+				log.Printf("Security scan attempt from %s: %s %s", ip, c.Request.Method, path)
+				break
+			}
+		}
+
+		// Check for SQL injection attempts
+		queryString := c.Request.URL.RawQuery
+		if strings.Contains(strings.ToLower(queryString), "union") ||
+			strings.Contains(strings.ToLower(queryString), "select") ||
+			strings.Contains(strings.ToLower(queryString), "drop") ||
+			strings.Contains(strings.ToLower(queryString), "insert") {
+			log.Printf("SQL injection attempt from %s: %s", ip, queryString)
 		}
 
 		c.Next()

@@ -542,13 +542,24 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		for (let img of imgs) {
 			if (img.src && 
 				(img.src.includes('bonhams') || 
+				 img.src.includes('twic.pics') ||
 				 img.src.includes('cloudinary') ||
 				 img.src.includes('imgix') ||
 				 img.src.includes('amazonaws')) &&
 				!img.src.includes('logo') &&
 				!img.src.includes('icon') &&
 				img.width > 100) {
-				images.push(img.src);
+				
+				let enhancedUrl = img.src;
+				// For twic.pics URLs, simply append /cover=900x700 for high quality
+				if (img.src.includes('twic.pics')) {
+					// Remove any existing resize or cover parameters first
+					enhancedUrl = img.src.replace(/\/resize=\d+/g, '').replace(/\/cover=[^/]*/g, '');
+					// Add high quality cover parameter
+					enhancedUrl += '/cover=900x700';
+				}
+				
+				images.push(enhancedUrl);
 			}
 		}
 		return JSON.stringify([...new Set(images.slice(0, 10))]);
@@ -683,10 +694,21 @@ func (s *BonhamsScraper) scrapeDetailPageConcurrent(url string) *models.BonhamsC
 		const imgs = document.querySelectorAll('img');
 		for (let img of imgs) {
 			if (img.src && 
-				(img.src.includes('bonhams') || img.src.includes('cloudinary') || 
-				 img.src.includes('imgix') || img.src.includes('amazonaws')) &&
+				(img.src.includes('bonhams') || img.src.includes('twic.pics') || 
+				 img.src.includes('cloudinary') || img.src.includes('imgix') || 
+				 img.src.includes('amazonaws')) &&
 				!img.src.includes('logo') && !img.src.includes('icon') && img.width > 100) {
-				result.images.push(img.src);
+				
+				let enhancedUrl = img.src;
+				// For twic.pics URLs, simply append /cover=800x600 for high quality
+				if (img.src.includes('twic.pics')) {
+					// Remove any existing resize or cover parameters first
+					enhancedUrl = img.src.replace(/\/resize=\d+/g, '').replace(/\/cover=[^/]*/g, '');
+					// Add high quality cover parameter
+					enhancedUrl += '/cover=800x600';
+				}
+				
+				result.images.push(enhancedUrl);
 			}
 		}
 		result.images = [...new Set(result.images.slice(0, 10))];

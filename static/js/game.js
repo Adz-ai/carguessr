@@ -62,7 +62,7 @@ async function loadNextCar() {
         
         // Reset guess inputs to be synchronized
         document.getElementById('priceGuess').value = '';
-        document.getElementById('priceSlider').value = 25; // Set to £50k (middle of first range)
+        document.getElementById('priceSlider').value = 50; // Set to £50k (middle of first range)
         
     } catch (error) {
         console.error('Error loading car:', error);
@@ -180,26 +180,6 @@ function displayCar(car) {
     }, 100);
 }
 
-// Enhance image URL for better quality
-function enhanceImageUrl(url) {
-    // For imgix URLs, add quality and size parameters
-    if (url.includes('imgix')) {
-        const separator = url.includes('?') ? '&' : '?';
-        return `${url}${separator}w=800&h=600&fit=crop&auto=format,enhance&q=85`;
-    }
-    
-    // For amazonaws URLs, try to get larger versions
-    if (url.includes('amazonaws')) {
-        // Remove any existing size constraints and add high quality params
-        let cleanUrl = url.replace(/\/\d+x\d+\//, '/').replace(/[?&]w=\d+/, '').replace(/[?&]h=\d+/, '');
-        const separator = cleanUrl.includes('?') ? '&' : '?';
-        return `${cleanUrl}${separator}w=800&h=600&q=85`;
-    }
-    
-    // For other URLs, return as-is but try to remove small size constraints
-    return url.replace(/\/thumb\//, '/').replace(/\/small\//, '/').replace(/\/preview\//, '/');
-}
-
 // Set up image gallery with multiple photos
 function setupImageGallery(images) {
     const mainImage = document.getElementById('mainCarImage');
@@ -213,86 +193,31 @@ function setupImageGallery(images) {
         return;
     }
     
-    // Enhance all image URLs for better quality
-    const enhancedImages = images.map(url => enhanceImageUrl(url));
-    
-    // Preload all images to prevent blurry loading
-    const imagePromises = enhancedImages.map(url => {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve({ url, img });
-            img.onerror = () => reject(new Error(`Failed to load ${url}`));
-            img.src = url;
-        });
-    });
-    
-    // Set main image with proper loading
+    // Set main image with fade effect
     mainImage.style.opacity = '0';
-    const firstImage = new Image();
-    firstImage.onload = () => {
-        mainImage.src = enhancedImages[0];
+    setTimeout(() => {
+        mainImage.src = images[0];
         mainImage.style.opacity = '1';
-    };
-    firstImage.onerror = () => {
-        // Fallback to original URL if enhanced version fails
-        const fallbackImage = new Image();
-        fallbackImage.onload = () => {
-            mainImage.src = images[0];
-            mainImage.style.opacity = '1';
-        };
-        fallbackImage.onerror = () => {
-            mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Not+Found';
-            mainImage.style.opacity = '1';
-        };
-        fallbackImage.src = images[0];
-    };
-    firstImage.src = enhancedImages[0];
+    }, 200);
     
     // Create thumbnails if more than one image
     if (images.length > 1) {
         images.forEach((imageUrl, index) => {
-            const enhancedUrl = enhancedImages[index];
             const thumbnail = document.createElement('img');
-            
-            // Add loading placeholder
-            thumbnail.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            thumbnail.src = imageUrl;
             thumbnail.className = 'thumbnail' + (index === 0 ? ' active' : '');
+            thumbnail.onclick = () => switchMainImage(imageUrl, thumbnail);
             
-            // Ensure image loads properly before showing
-            thumbnail.onload = () => {
-                thumbnail.style.backgroundColor = '';
-                // Add staggered animation after image loads
-                setTimeout(() => {
-                    thumbnail.style.transition = 'all 0.3s ease';
-                    thumbnail.style.opacity = index === 0 ? '1' : '';
-                    thumbnail.style.transform = '';
-                }, 50 * index);
-            };
-            
-            thumbnail.onerror = () => {
-                // Fallback to original URL if enhanced version fails
-                const fallbackThumb = new Image();
-                fallbackThumb.onload = () => {
-                    thumbnail.src = imageUrl;
-                    thumbnail.style.backgroundColor = '';
-                };
-                fallbackThumb.onerror = () => {
-                    thumbnail.src = 'https://via.placeholder.com/90x70?text=Error';
-                    thumbnail.style.backgroundColor = '';
-                };
-                fallbackThumb.src = imageUrl;
-            };
-            
-            thumbnail.onclick = () => switchMainImage(enhancedUrl, thumbnail, imageUrl);
-            
-            // Set initial animation state
+            // Add staggered animation
             thumbnail.style.opacity = '0';
             thumbnail.style.transform = 'translateY(20px)';
-            
-            // Set the enhanced source after setting up event handlers
-            thumbnail.src = enhancedUrl;
-            
             thumbnailStrip.appendChild(thumbnail);
+            
+            setTimeout(() => {
+                thumbnail.style.transition = 'all 0.3s ease';
+                thumbnail.style.opacity = '';
+                thumbnail.style.transform = '';
+            }, 50 * index);
         });
         
         // Show thumbnail strip
@@ -304,50 +229,15 @@ function setupImageGallery(images) {
 }
 
 // Switch main image when thumbnail clicked
-function switchMainImage(enhancedUrl, clickedThumbnail, originalUrl = null) {
+function switchMainImage(imageUrl, clickedThumbnail) {
     const mainImage = document.getElementById('mainCarImage');
     
-    // Add loading state
-    mainImage.style.opacity = '0.3';
-    mainImage.style.filter = 'blur(2px)';
-    
-    // Preload the enhanced image to ensure it's crisp
-    const newImage = new Image();
-    newImage.onload = () => {
-        // Enhanced image is fully loaded, now switch
-        mainImage.src = enhancedUrl;
+    // Fade out, change, fade in
+    mainImage.style.opacity = '0';
+    setTimeout(() => {
+        mainImage.src = imageUrl;
         mainImage.style.opacity = '1';
-        mainImage.style.filter = 'none';
-        mainImage.style.transition = 'all 0.3s ease';
-    };
-    
-    newImage.onerror = () => {
-        // Enhanced URL failed, try original URL if provided
-        if (originalUrl && originalUrl !== enhancedUrl) {
-            const fallbackImage = new Image();
-            fallbackImage.onload = () => {
-                mainImage.src = originalUrl;
-                mainImage.style.opacity = '1';
-                mainImage.style.filter = 'none';
-                mainImage.style.transition = 'all 0.3s ease';
-            };
-            fallbackImage.onerror = () => {
-                // Both URLs failed, show error placeholder
-                mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Error';
-                mainImage.style.opacity = '1';
-                mainImage.style.filter = 'none';
-            };
-            fallbackImage.src = originalUrl;
-        } else {
-            // No fallback available, show error
-            mainImage.src = 'https://via.placeholder.com/600x400?text=Image+Error';
-            mainImage.style.opacity = '1';
-            mainImage.style.filter = 'none';
-        }
-    };
-    
-    // Start loading the enhanced image
-    newImage.src = enhancedUrl;
+    }, 200);
     
     // Update active thumbnail with smooth transition
     document.querySelectorAll('.thumbnail').forEach(thumb => {

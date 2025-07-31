@@ -81,6 +81,9 @@ func main() {
 	// Add security headers
 	r.Use(middleware.SecurityHeaders())
 
+	// Add security scan detection (for fail2ban)
+	r.Use(middleware.SecurityScanDetection())
+
 	// Add request logging middleware for debugging
 	r.Use(func(c *gin.Context) {
 		log.Printf("Request: %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
