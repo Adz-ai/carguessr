@@ -59,6 +59,9 @@ func main() {
 	// Initialize Gin router
 	r := gin.Default()
 
+	// Limit request body size (1MB max)
+	r.MaxMultipartMemory = 1 << 20 // 1MB
+
 	// Configure trusted proxies for Cloudflare Tunnels
 	r.SetTrustedProxies([]string{
 		"127.0.0.1",
@@ -83,6 +86,15 @@ func main() {
 
 	// Add security scan detection (for fail2ban)
 	r.Use(middleware.SecurityScanDetection())
+
+	// Add HTTP method filtering (only allow GET and POST)
+	r.Use(middleware.HTTPMethodFilter([]string{"GET", "POST", "OPTIONS"}))
+
+	// Add user agent filtering
+	r.Use(middleware.UserAgentFilter())
+
+	// Add honeypot endpoints
+	r.Use(middleware.HoneypotEndpoints())
 
 	// Add request logging middleware for debugging
 	r.Use(func(c *gin.Context) {

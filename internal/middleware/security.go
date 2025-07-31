@@ -135,6 +135,19 @@ func SecurityHeaders() gin.HandlerFunc {
 		// Content Security Policy
 		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;")
 
+		// Strict Transport Security (HTTPS only)
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+		// Hide server information
+		c.Header("Server", "")
+
+		// Prevent caching of sensitive responses
+		if strings.Contains(c.Request.URL.Path, "/api/admin/") {
+			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
+		}
+
 		c.Next()
 	}
 }
@@ -187,6 +200,88 @@ func SecurityScanDetection() gin.HandlerFunc {
 			strings.Contains(strings.ToLower(queryString), "drop") ||
 			strings.Contains(strings.ToLower(queryString), "insert") {
 			log.Printf("SQL injection attempt from %s: %s", ip, queryString)
+		}
+
+		c.Next()
+	}
+}
+
+// HTTPMethodFilter restricts allowed HTTP methods
+func HTTPMethodFilter(allowedMethods []string) gin.HandlerFunc {
+	allowed := make(map[string]bool)
+	for _, method := range allowedMethods {
+		allowed[method] = true
+	}
+
+	return func(c *gin.Context) {
+		if !allowed[c.Request.Method] {
+			log.Printf("Blocked HTTP method %s from %s", c.Request.Method, c.ClientIP())
+			c.JSON(http.StatusMethodNotAllowed, gin.H{
+				"error": "Method not allowed",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// UserAgentFilter blocks requests with suspicious or missing user agents
+func UserAgentFilter() gin.HandlerFunc {
+	suspiciousAgents := []string{
+		"sqlmap", "nikto", "nmap", "masscan", "zap", "gobuster",
+		"dirb", "dirbuster", "burp", "w3af", "havij", "libwww",
+	}
+
+	return func(c *gin.Context) {
+		userAgent := strings.ToLower(c.GetHeader("User-Agent"))
+		ip := c.ClientIP()
+
+		// Block empty user agents (likely bots)
+		if userAgent == "" {
+			log.Printf("Blocked empty user agent from %s", ip)
+			c.JSON(http.StatusForbidden, gin.H{"error": "User agent required"})
+			c.Abort()
+			return
+		}
+
+		// Block known attack tools
+		for _, suspicious := range suspiciousAgents {
+			if strings.Contains(userAgent, suspicious) {
+				log.Printf("Blocked suspicious user agent from %s: %s", ip, userAgent)
+				c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+				c.Abort()
+				return
+			}
+		}
+
+		c.Next()
+	}
+}
+
+// HoneypotEndpoints creates fake endpoints to detect automated scanners
+func HoneypotEndpoints() gin.HandlerFunc {
+	honeypots := []string{
+		"/admin.php", "/wp-login.php", "/login.php", "/admin/login",
+		"/administrator", "/admin/admin", "/user/login", "/auth/login",
+		"/xmlrpc.php", "/wp-admin/admin-ajax.php", "/api/v1/login",
+	}
+
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		for _, honeypot := range honeypots {
+			if path == honeypot {
+				ip := c.ClientIP()
+				log.Printf("Honeypot triggered by %s: %s", ip, path)
+
+				// Slow down the response to waste attacker's time
+				time.Sleep(5 * time.Second)
+
+				c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+				c.Abort()
+				return
+			}
 		}
 
 		c.Next()
