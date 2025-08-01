@@ -130,6 +130,11 @@ func main() {
 	r.Static("/static", "./static")
 	r.StaticFile("/", "./static/index.html")
 
+	// SEO files at root level
+	r.StaticFile("/sitemap.xml", "./static/sitemap.xml")
+	r.StaticFile("/robots.txt", "./static/robots.txt")
+	r.StaticFile("/favicon.ico", "./static/favicon_io/favicon.ico")
+
 	// Initialize game handler
 	gameHandler := game.NewHandler()
 
