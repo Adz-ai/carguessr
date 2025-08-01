@@ -415,6 +415,15 @@ function displayResult(result) {
             currentGame.mode === 'zero' 
                 ? `Total Difference: £${result.score.toLocaleString()}`
                 : `Final Streak: ${result.score}`;
+        
+        // Hide submit button if streak score is 0
+        const submitButton = document.getElementById('submitStreakScore');
+        if (currentGame.mode === 'streak' && result.score === 0) {
+            submitButton.style.display = 'none';
+        } else {
+            submitButton.style.display = '';
+        }
+        
         document.getElementById('gameOverModal').style.display = 'flex';
     } else {
         document.getElementById('resultModal').style.display = 'flex';
@@ -575,16 +584,10 @@ async function submitChallengeGuess(guessValue) {
         // Update score display
         document.getElementById('scoreValue').textContent = result.totalScore;
         
-        if (result.sessionComplete) {
-            // Show challenge complete modal
-            displayChallengeResults();
-        } else {
-            // Show result and move to next car
-            displayChallengeResult(result);
-        }
+        // Always show the individual result first
+        displayChallengeResult(result);
         
     } catch (error) {
-        console.error('Error submitting challenge guess:', error);
         alert('Failed to submit guess. Please try again.');
     } finally {
         submitButton.innerHTML = 'Submit Guess';
@@ -615,7 +618,7 @@ function displayChallengeResult(result) {
     
     // Show modal with modified buttons
     const nextButton = document.querySelector('.next-button');
-    nextButton.textContent = result.isLastCar ? 'View Results' : 'Next Car';
+    nextButton.textContent = (result.isLastCar || result.sessionComplete) ? 'View Results' : 'Next Car';
     
     document.getElementById('resultModal').style.display = 'flex';
 }
@@ -645,6 +648,14 @@ function displayChallengeResults() {
         
         resultsDiv.appendChild(resultItem);
     });
+    
+    // Hide submit button if score is 0
+    const submitButton = document.querySelector('#challengeCompleteModal .submit-score-button');
+    if (session.totalScore === 0) {
+        submitButton.style.display = 'none';
+    } else {
+        submitButton.style.display = '';
+    }
     
     // Show challenge complete modal
     document.getElementById('challengeCompleteModal').style.display = 'flex';
@@ -719,7 +730,6 @@ function showNameInputModal(gameMode) {
     } else if (gameMode === 'streak') {
         score = currentGame.score;
         sessionId = currentGame.sessionId;
-        console.log('Streak mode data:', { score, sessionId, currentGameScore: currentGame.score });
     }
     
     currentGame.pendingLeaderboardData = {
@@ -774,8 +784,6 @@ async function submitToLeaderboard() {
             gameMode: currentGame.pendingLeaderboardData.gameMode,
             sessionId: currentGame.pendingLeaderboardData.sessionId || ''
         };
-        
-        console.log('Submitting leaderboard data:', submissionData);
         
         const response = await fetch('/api/leaderboard/submit', {
             method: 'POST',
