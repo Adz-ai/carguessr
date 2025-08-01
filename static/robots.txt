@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+Disallow: /api/admin/
+
+Disallow: /api/
+
+Sitemap: https://carguessr.uk/sitemap.xml
