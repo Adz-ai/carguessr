@@ -4,18 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motors Price Guesser</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=3.0">
+    <link rel="stylesheet" href="/static/css/styles.css?v=3.5">
 </head>
 <body>
-    <!-- Home Button -->
-    <button class="home-button" onclick="location.reload()" title="Home">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-        </svg>
-    </button>
-    
     <div class="container">
+        <!-- Top Navigation Bar -->
+        <div class="top-nav">
+            <button class="home-button" onclick="location.reload()" title="Home">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+            </button>
+            <button onclick="openLeaderboard()" class="leaderboard-button" title="View Leaderboard">
+                🏆 Leaderboard
+            </button>
+        </div>
+        
         <!-- Header -->
         <header>
             <h1>Motors Price Guesser</h1>
@@ -23,10 +28,6 @@
                 <span id="scoreLabel">Score: </span>
                 <span id="scoreValue">0</span>
             </div>
-            <button onclick="openLeaderboard()" class="leaderboard-button" title="View Leaderboard">
-                🏆 Leaderboard
-            </button>
-            <div id="dataSourceInfo" style="font-size: 0.8em; color: #666; margin-top: 5px;"></div>
         </header>
 
         <!-- Game Mode Selection -->
@@ -226,6 +227,6 @@
         </div>
     </div>
 
-    <script src="/static/js/game.js?v=3.0"></script>
+    <script src="/static/js/game.js?v=3.3"></script>
 </body>
 </html>

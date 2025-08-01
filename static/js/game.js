@@ -22,7 +22,7 @@ function startGame(mode) {
     // Hide mode selection, show game area
     document.getElementById('modeSelection').style.display = 'none';
     document.getElementById('gameArea').style.display = 'block';
-    document.getElementById('scoreDisplay').style.display = 'block';
+    document.getElementById('scoreDisplay').style.display = 'inline-block';
     
     // Update score label based on mode
     const scoreLabel = document.getElementById('scoreLabel');
@@ -34,8 +34,7 @@ function startGame(mode) {
         scoreLabel.textContent = 'Score: ';
     }
     
-    // Load data source info
-    loadDataSourceInfo();
+    // Data source info removed - leaderboard button now takes that space
     
     // Handle challenge mode differently
     if (mode === 'challenge') {
@@ -452,28 +451,7 @@ window.onclick = function(event) {
     }
 }
 
-// Load data source information
-async function loadDataSourceInfo() {
-    try {
-        const response = await fetch('/api/data-source');
-        if (!response.ok) throw new Error('Failed to load data source info');
-        
-        const data = await response.json();
-        const sourceInfo = document.getElementById('dataSourceInfo');
-        
-        let sourceName = data.data_source;
-        if (sourceName === 'carwow') sourceName = 'CarWow';
-        else if (sourceName === 'autotrader') sourceName = 'AutoTrader';
-        else if (sourceName === 'mixed') sourceName = 'CarWow + AutoTrader';
-        else if (sourceName === 'uk_realistic') sourceName = 'UK Realistic Data';
-        else if (sourceName === 'bonhams_auctions') sourceName = 'Bonhams Car Auctions';
-        else if (sourceName === 'collecting_cars_live') sourceName = 'Collecting Cars';
-        
-        sourceInfo.textContent = `Data source: ${sourceName} (${data.total_listings} listings)`;
-    } catch (error) {
-        console.error('Error loading data source info:', error);
-    }
-}
+// Data source info removed - functionality preserved in backend for admin use
 
 // Challenge Mode Functions
 async function startChallengeMode() {
@@ -673,8 +651,6 @@ function displayChallengeResults() {
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
-    // Load data source info on page load
-    loadDataSourceInfo();
     
     // Add shake animation to CSS
     const style = document.createElement('style');

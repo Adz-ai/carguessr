@@ -43,20 +43,27 @@ body::before {
     z-index: 1;
 }
 
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 10px 0;
+    animation: fadeInDown 0.5s ease-out;
+}
+
 /* Header */
 header {
     text-align: center;
     color: white;
     margin-bottom: 40px;
     position: relative;
-    animation: fadeInDown 0.8s ease-out;
+    animation: fadeInDown 0.8s ease-out 0.2s both;
 }
 
 /* Home button */
 .home-button {
-    position: fixed;
-    left: 20px;
-    top: 20px;
     background: rgba(255, 255, 255, 0.05);
     border: none;
     border-radius: 16px;
@@ -69,7 +76,6 @@ header {
     justify-content: center;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
 }
 
 .home-button:hover {
@@ -101,7 +107,7 @@ header {
 
 header h1 {
     font-size: 3.5rem;
-    margin-bottom: 10px;
+    margin: 0;
     background: linear-gradient(135deg, #20b2aa 0%, #4169e1 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -112,9 +118,7 @@ header h1 {
 }
 
 .score-display {
-    position: absolute;
-    top: 0;
-    right: 0;
+    display: inline-block;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(20px);
     padding: 12px 24px;
@@ -124,6 +128,7 @@ header h1 {
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: pulse 2s ease-in-out infinite;
+    margin-top: 20px;
 }
 
 @keyframes pulse {
@@ -754,20 +759,19 @@ header h1 {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    /* Stack navigation buttons on mobile */
+    .top-nav {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+    
     header h1 {
         font-size: 2.5rem;
     }
     
     .score-display {
-        position: static;
-        margin-top: 20px;
-        display: inline-block;
-    }
-    
-    .leaderboard-button {
-        position: static;
         margin-top: 15px;
-        display: inline-block;
     }
     
     .car-display {
@@ -996,14 +1000,11 @@ header h1 {
 
 /* Leaderboard Styling */
 .leaderboard-button {
-    position: absolute;
-    top: 0;
-    left: 0;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(20px);
-    padding: 8px 16px;
-    border-radius: 25px;
-    font-size: 0.9rem;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 1rem;
     font-weight: bold;
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -1011,6 +1012,7 @@ header h1 {
     cursor: pointer;
     transition: all 0.3s ease;
 }
+
 
 .leaderboard-button:hover {
     background: rgba(255, 255, 255, 0.15);
