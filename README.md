@@ -1,4 +1,4 @@
-# Motors Price Guesser Game 🚗💸
+# CarGuessr 🚗💸
 
 A fun web-based game where players guess the prices of real cars from Motors.co.uk listings. Built with Go/Gin backend and vanilla JavaScript frontend.
 

@@ -1,11 +1,11 @@
-// Motors Price Guesser Game API
-// @title Motors Price Guesser API
+// CarGuessr Game API
+// @title CarGuessr API
 // @version 2.1
 // @description A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.
-// @termsOfService https://github.com/your-repo/motors-price-guesser
+// @termsOfService https://carguessr.uk
 //
-// @contact.name Motors Price Guesser Support
-// @contact.url https://github.com/your-repo/motors-price-guesser/issues
+// @contact.name CarGuessr Support
+// @contact.url https://github.com/your-repo/carguessr/issues
 //
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
