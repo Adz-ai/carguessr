@@ -6,7 +6,8 @@ let currentGame = {
     sessionId: generateSessionId(),
     challengeSession: null,
     challengeGuesses: [],
-    pendingLeaderboardData: null // Store data for leaderboard submission
+    pendingLeaderboardData: null, // Store data for leaderboard submission
+    leaderboardShownAfterSubmission: false // Track if leaderboard was shown after score submission
 };
 
 // Generate a session ID for tracking scores
@@ -718,6 +719,7 @@ function showNameInputModal(gameMode) {
     } else if (gameMode === 'streak') {
         score = currentGame.score;
         sessionId = currentGame.sessionId;
+        console.log('Streak mode data:', { score, sessionId, currentGameScore: currentGame.score });
     }
     
     currentGame.pendingLeaderboardData = {
@@ -766,17 +768,21 @@ async function submitToLeaderboard() {
     }
     
     try {
+        const submissionData = {
+            name: name,
+            score: parseInt(currentGame.pendingLeaderboardData.score) || 0, // Ensure score is an integer
+            gameMode: currentGame.pendingLeaderboardData.gameMode,
+            sessionId: currentGame.pendingLeaderboardData.sessionId || ''
+        };
+        
+        console.log('Submitting leaderboard data:', submissionData);
+        
         const response = await fetch('/api/leaderboard/submit', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                name: name,
-                score: currentGame.pendingLeaderboardData.score,
-                gameMode: currentGame.pendingLeaderboardData.gameMode,
-                sessionId: currentGame.pendingLeaderboardData.sessionId || ''
-            })
+            body: JSON.stringify(submissionData)
         });
         
         if (!response.ok) {
@@ -808,6 +814,9 @@ function skipLeaderboard() {
 
 // Open leaderboard modal
 function openLeaderboard() {
+    // Reset flag since this is manual access, not after score submission
+    currentGame.leaderboardShownAfterSubmission = false;
+    
     document.getElementById('leaderboardModal').style.display = 'flex';
     showLeaderboard('challenge'); // Default to challenge mode
 }
@@ -815,6 +824,11 @@ function openLeaderboard() {
 // Close leaderboard modal
 function closeLeaderboard() {
     document.getElementById('leaderboardModal').style.display = 'none';
+    
+    // If leaderboard was shown after score submission, reload page to go back to homepage
+    if (currentGame.leaderboardShownAfterSubmission) {
+        location.reload();
+    }
 }
 
 // Show leaderboard for specific game mode
@@ -877,6 +891,9 @@ function displayLeaderboardEntries(entries, gameMode) {
 
 // Show leaderboard with highlighted entry
 async function showLeaderboardWithHighlight(entry, position) {
+    // Mark that leaderboard is being shown after score submission
+    currentGame.leaderboardShownAfterSubmission = true;
+    
     document.getElementById('leaderboardModal').style.display = 'flex';
     
     // Show the appropriate tab

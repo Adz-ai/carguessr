@@ -284,8 +284,14 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/leaderboard/submit [post]
 func (h *Handler) SubmitScore(c *gin.Context) {
+	// Read body for debugging
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("Leaderboard submission request body: %s", string(bodyBytes))
+
 	var req models.LeaderboardSubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Leaderboard submission binding error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format", "details": err.Error()})
 		return
 	}
