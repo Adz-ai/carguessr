@@ -298,6 +298,24 @@ function displayCar(car) {
     }, 100);
 }
 
+// Handle image loading errors
+function handleImageError(imgElement, originalUrl) {
+    console.log('Image failed to load:', originalUrl);
+    
+    // Check if this is Easy mode (current game exists and difficulty is easy)
+    if (currentGame && currentGame.difficulty === 'easy') {
+        // Show Europe warning if not already shown
+        const warning = document.getElementById('europeWarning');
+        if (warning && warning.style.display === 'none') {
+            warning.style.display = 'flex';
+        }
+    }
+    
+    // Set placeholder image
+    imgElement.src = 'https://via.placeholder.com/600x400?text=Image+Not+Available';
+    imgElement.style.filter = 'grayscale(1)';
+}
+
 // Set up image gallery with multiple photos
 function setupImageGallery(images) {
     const mainImage = document.getElementById('mainCarImage');
@@ -307,7 +325,7 @@ function setupImageGallery(images) {
     thumbnailStrip.innerHTML = '';
     
     if (images.length === 0) {
-        mainImage.src = 'https://via.placeholder.com/600x400?text=No+Image';
+        mainImage.src = 'https://www.travelodge.co.uk/nw/assets/img/photo/image-unavailable.png';
         return;
     }
     
@@ -315,6 +333,7 @@ function setupImageGallery(images) {
     mainImage.style.opacity = '0';
     setTimeout(() => {
         mainImage.src = images[0];
+        mainImage.onerror = () => handleImageError(mainImage, images[0]);
         mainImage.style.opacity = '1';
     }, 200);
     
@@ -323,6 +342,7 @@ function setupImageGallery(images) {
         images.forEach((imageUrl, index) => {
             const thumbnail = document.createElement('img');
             thumbnail.src = imageUrl;
+            thumbnail.onerror = () => handleImageError(thumbnail, imageUrl);
             thumbnail.className = 'thumbnail' + (index === 0 ? ' active' : '');
             thumbnail.onclick = () => switchMainImage(imageUrl, thumbnail);
             
@@ -354,6 +374,7 @@ function switchMainImage(imageUrl, clickedThumbnail) {
     mainImage.style.opacity = '0';
     setTimeout(() => {
         mainImage.src = imageUrl;
+        mainImage.onerror = () => handleImageError(mainImage, imageUrl);
         mainImage.style.opacity = '1';
     }, 200);
     

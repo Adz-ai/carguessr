@@ -35,7 +35,7 @@
     <link rel="shortcut icon" href="/static/favicon_io/favicon.ico">
     <link rel="manifest" href="/static/favicon_io/site.webmanifest">
     
-    <link rel="stylesheet" href="/static/css/styles.css?v=3.7">
+    <link rel="stylesheet" href="/static/css/styles.css?v=3.8">
     <link rel="canonical" href="https://carguessr.uk/">
     
     <!-- Structured Data -->
@@ -71,6 +71,17 @@
 </head>
 <body>
     <div class="container">
+        <!-- Europe Warning Banner -->
+        <div id="europeWarning" class="europe-warning" style="display: none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Easy mode images may not load outside Europe due to regional restrictions. Try Hard mode for full functionality worldwide.</span>
+            <button onclick="document.getElementById('europeWarning').style.display='none'" class="close-warning">×</button>
+        </div>
+        
         <!-- Top Navigation Bar -->
         <div class="top-nav">
             <button class="home-button" onclick="location.reload()" title="Home">
@@ -332,6 +343,6 @@
         </div>
     </div>
 
-    <script src="/static/js/game.js?v=3.3"></script>
+    <script src="/static/js/game.js?v=3.4"></script>
 </body>
 </html>
