@@ -1,6 +1,7 @@
 // Game state
 let currentGame = {
     mode: null,
+    difficulty: 'easy', // Default to easy mode
     currentListing: null,
     score: 0,
     sessionId: generateSessionId(),
@@ -10,9 +11,56 @@ let currentGame = {
     leaderboardShownAfterSubmission: false // Track if leaderboard was shown after score submission
 };
 
+// Leaderboard state
+let leaderboardState = {
+    currentGameMode: 'challenge',
+    currentDifficulty: 'easy'
+};
+
 // Generate a session ID for tracking scores
 function generateSessionId() {
     return Math.random().toString(36).substr(2, 9);
+}
+
+// LocalStorage functions for difficulty preference
+function saveDifficultyPreference(difficulty) {
+    try {
+        localStorage.setItem('carguessr_difficulty', difficulty);
+    } catch (e) {
+        console.log('Unable to save difficulty preference:', e);
+    }
+}
+
+function loadDifficultyPreference() {
+    try {
+        return localStorage.getItem('carguessr_difficulty') || 'easy';
+    } catch (e) {
+        console.log('Unable to load difficulty preference:', e);
+        return 'easy';
+    }
+}
+
+// Select difficulty mode
+function selectDifficulty(difficulty) {
+    currentGame.difficulty = difficulty;
+    leaderboardState.currentDifficulty = difficulty; // Update leaderboard state too
+    
+    // Save preference to localStorage
+    saveDifficultyPreference(difficulty);
+    
+    // Update button states
+    document.getElementById('easyButton').classList.remove('active');
+    document.getElementById('hardButton').classList.remove('active');
+    
+    if (difficulty === 'easy') {
+        document.getElementById('easyButton').classList.add('active');
+        document.getElementById('difficultyDescription').innerHTML = 
+            '<strong>Easy Mode:</strong> Modern used cars from Lookers dealership. Realistic pricing from a major UK car dealer - perfect for beginners!';
+    } else {
+        document.getElementById('hardButton').classList.add('active');
+        document.getElementById('difficultyDescription').innerHTML = 
+            '<strong>Hard Mode:</strong> Classic and exotic cars from Bonhams auction house. Higher value cars with unique characteristics - the ultimate challenge!';
+    }
 }
 
 // Start the game with selected mode
@@ -49,8 +97,10 @@ function startGame(mode) {
 // Load a random car listing
 async function loadNextCar() {
     try {
-        // Try enhanced listing first, fallback to standard
-        let response = await fetch('/api/random-enhanced-listing');
+        // Include difficulty parameter in the request
+        const difficultyParam = currentGame.difficulty ? `?difficulty=${currentGame.difficulty}` : '';
+        let response = await fetch(`/api/random-enhanced-listing${difficultyParam}`);
+        
         if (!response.ok) {
             console.log('Enhanced listing not available, falling back to standard');
             response = await fetch('/api/random-listing');
@@ -90,21 +140,50 @@ function displayCar(car) {
         // Set up image gallery
         setupImageGallery(car.images || []);
         
-        // Set car title
-        document.getElementById('carTitle').textContent = `${car.year || 'Unknown'} ${car.make || 'Unknown'} ${car.model || 'Unknown'}`;
+        // Set car title - use cleaned title for Easy mode if available
+        let displayTitle;
+        if (!car.auctionDetails && car.fullTitle && car.fullTitle.includes(' - ')) {
+            // Easy mode: extract main part before hyphen
+            const parts = car.fullTitle.split(' - ');
+            displayTitle = parts[0];
+        } else {
+            // Hard mode or fallback: use standard format
+            displayTitle = `${car.year || 'Unknown'} ${car.make || 'Unknown'} ${car.model || 'Unknown'}`;
+        }
+        document.getElementById('carTitle').textContent = displayTitle;
+        
+        // Handle trim display for Easy mode
+        const trimRow = document.getElementById('trimRow');
+        const trimElement = document.getElementById('carTrim');
+        if (!car.auctionDetails && car.trim && car.trim !== '') {
+            trimElement.textContent = car.trim;
+            trimRow.style.display = 'flex';
+        } else {
+            trimRow.style.display = 'none';
+        }
         
         // Set car details with staggered animation
         const details = [
             { id: 'carYear', value: car.year || 'Unknown' },
             { id: 'carEngine', value: car.engine || 'Unknown' },
             { id: 'carMileage', value: car.mileageFormatted || (car.mileage ? car.mileage.toLocaleString() + ' miles' : 'Unknown') },
+            { id: 'carTrim', value: car.trim || 'Unknown' },
+            { id: 'carOwners', value: car.owners || 'Unknown' },
             { id: 'carFuelType', value: car.fuelType || 'Unknown' },
+            { id: 'carBodyType', value: car.bodyType || 'Unknown' },
             { id: 'carGearbox', value: car.gearbox || 'Unknown' },
-            { id: 'carBodyColour', value: car.bodyColour || car.exteriorColor || 'Unknown' }
+            { id: 'carDoors', value: car.doors || 'Unknown' },
+            { id: 'carBodyColour', value: car.bodyColour || car.exteriorColor || 'Unknown' },
+            { id: 'carLocation', value: car.location || 'Unknown' }
         ];
 
-        // Handle enhanced Bonhams characteristics
+        // Handle car type specific fields
         if (car.auctionDetails) {
+            // Hard Mode (Bonhams) - Hide Easy mode fields, show Hard mode fields
+            document.getElementById('ownersRow').style.display = 'none';
+            document.getElementById('bodyTypeRow').style.display = 'none';
+            document.getElementById('doorsRow').style.display = 'none';
+            
             // Show sale date if available
             const saleDateRow = document.getElementById('saleDateRow');
             const saleDateElement = document.getElementById('carSaleDate');
@@ -115,7 +194,7 @@ function displayCar(car) {
                 saleDateRow.style.display = 'none';
             }
 
-            // Show location if available
+            // Show location (always visible for both modes)
             const locationRow = document.getElementById('locationRow');
             const locationElement = document.getElementById('carLocation');
             if (car.location) {
@@ -164,9 +243,39 @@ function displayCar(car) {
                 keyFactsSection.style.display = 'none';
             }
         } else {
-            // Hide enhanced sections for standard cars
+            // Easy Mode (Lookers) - Show Easy mode fields, hide Hard mode fields
+            // Show Easy mode specific fields if data is available
+            const ownersRow = document.getElementById('ownersRow');
+            if (car.owners && car.owners !== 'Unknown') {
+                ownersRow.style.display = 'flex';
+            } else {
+                ownersRow.style.display = 'none';
+            }
+            
+            const bodyTypeRow = document.getElementById('bodyTypeRow');
+            if (car.bodyType && car.bodyType !== 'Unknown') {
+                bodyTypeRow.style.display = 'flex';
+            } else {
+                bodyTypeRow.style.display = 'none';
+            }
+            
+            const doorsRow = document.getElementById('doorsRow');
+            if (car.doors && car.doors !== 'Unknown') {
+                doorsRow.style.display = 'flex';
+            } else {
+                doorsRow.style.display = 'none';
+            }
+            
+            // Show location if available
+            const locationRow = document.getElementById('locationRow');
+            if (car.location && car.location !== 'Unknown') {
+                locationRow.style.display = 'flex';
+            } else {
+                locationRow.style.display = 'none';
+            }
+            
+            // Hide Hard mode only sections
             document.getElementById('saleDateRow').style.display = 'none';
-            document.getElementById('locationRow').style.display = 'none';
             document.getElementById('interiorColorRow').style.display = 'none';
             document.getElementById('steeringRow').style.display = 'none';
             document.getElementById('auctionDetailsSection').style.display = 'none';
@@ -358,7 +467,8 @@ async function submitGuess() {
             body: JSON.stringify({
                 listingId: currentGame.currentListing.id,
                 guessedPrice: guessValue,
-                gameMode: currentGame.mode
+                gameMode: currentGame.mode,
+                difficulty: currentGame.difficulty
             })
         });
         
@@ -397,12 +507,10 @@ function displayResult(result) {
     if (result.originalUrl) {
         originalLinkDiv.style.display = 'block';
         let linkText = 'View Original Listing';
-        if (result.originalUrl.includes('motors')) {
-            linkText = 'View Original Listing on Motors.co.uk';
-        } else if (result.originalUrl.includes('collectingcars')) {
-            linkText = 'View Original Listing on Collecting Cars';
-        } else if (result.originalUrl.includes('bonhams')) {
+        if (result.originalUrl.includes('bonhams')) {
             linkText = 'View Original Auction Listing on Bonhams';
+        } else if (result.originalUrl.includes('lookers')) {
+            linkText = 'View Original Listing on Lookers';
         }
         originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">${linkText}</a>`;
     } else {
@@ -466,8 +574,9 @@ window.onclick = function(event) {
 // Challenge Mode Functions
 async function startChallengeMode() {
     try {
-        // Start a new challenge session
-        const response = await fetch('/api/challenge/start', {
+        // Include difficulty parameter in the request
+        const difficultyParam = currentGame.difficulty ? `?difficulty=${currentGame.difficulty}` : '';
+        const response = await fetch(`/api/challenge/start${difficultyParam}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -664,6 +773,17 @@ function displayChallengeResults() {
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
     
+    // Load saved difficulty preference and apply it
+    const savedDifficulty = loadDifficultyPreference();
+    currentGame.difficulty = savedDifficulty;
+    leaderboardState.currentDifficulty = savedDifficulty;
+    selectDifficulty(savedDifficulty); // This will update the UI to match
+    
+    // Update leaderboard difficulty tabs to match preference
+    document.getElementById('hardDifficultyTab').classList.remove('active');
+    document.getElementById('easyDifficultyTab').classList.remove('active');
+    document.getElementById(savedDifficulty + 'DifficultyTab').classList.add('active');
+    
     // Add shake animation to CSS
     const style = document.createElement('style');
     style.innerHTML = `
@@ -782,6 +902,7 @@ async function submitToLeaderboard() {
             name: name,
             score: parseInt(currentGame.pendingLeaderboardData.score) || 0, // Ensure score is an integer
             gameMode: currentGame.pendingLeaderboardData.gameMode,
+            difficulty: currentGame.difficulty || 'hard', // Include current difficulty
             sessionId: currentGame.pendingLeaderboardData.sessionId || ''
         };
         
@@ -825,6 +946,9 @@ function openLeaderboard() {
     // Reset flag since this is manual access, not after score submission
     currentGame.leaderboardShownAfterSubmission = false;
     
+    // Use current difficulty preference
+    leaderboardState.currentDifficulty = currentGame.difficulty;
+    
     document.getElementById('leaderboardModal').style.display = 'flex';
     showLeaderboard('challenge'); // Default to challenge mode
 }
@@ -841,21 +965,46 @@ function closeLeaderboard() {
 
 // Show leaderboard for specific game mode
 async function showLeaderboard(gameMode) {
-    // Update tab states
+    // Update game mode state and tab states
+    leaderboardState.currentGameMode = gameMode;
     document.getElementById('challengeTab').classList.remove('active');
     document.getElementById('streakTab').classList.remove('active');
     document.getElementById(gameMode + 'Tab').classList.add('active');
     
+    // Update difficulty tab states based on current preference
+    document.getElementById('hardDifficultyTab').classList.remove('active');
+    document.getElementById('easyDifficultyTab').classList.remove('active');
+    document.getElementById(leaderboardState.currentDifficulty + 'DifficultyTab').classList.add('active');
+    
+    // Load leaderboard with current difficulty
+    await loadLeaderboardData();
+}
+
+// Toggle difficulty filter for leaderboard
+async function toggleDifficultyFilter(difficulty) {
+    // Update difficulty state and tab states
+    leaderboardState.currentDifficulty = difficulty;
+    document.getElementById('hardDifficultyTab').classList.remove('active');
+    document.getElementById('easyDifficultyTab').classList.remove('active');
+    document.getElementById(difficulty + 'DifficultyTab').classList.add('active');
+    
+    // Load leaderboard with new difficulty
+    await loadLeaderboardData();
+}
+
+// Load leaderboard data with current filters
+async function loadLeaderboardData() {
     // Show loading
     const contentArea = document.getElementById('leaderboardContent');
     contentArea.innerHTML = '<div class="leaderboard-empty">Loading...</div>';
     
     try {
-        const response = await fetch(`/api/leaderboard?mode=${gameMode}&limit=10`);
+        const url = `/api/leaderboard?mode=${leaderboardState.currentGameMode}&difficulty=${leaderboardState.currentDifficulty}&limit=10`;
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load leaderboard');
         
         const entries = await response.json();
-        displayLeaderboardEntries(entries, gameMode);
+        displayLeaderboardEntries(entries, leaderboardState.currentGameMode, leaderboardState.currentDifficulty);
         
     } catch (error) {
         console.error('Error loading leaderboard:', error);
@@ -864,14 +1013,16 @@ async function showLeaderboard(gameMode) {
 }
 
 // Display leaderboard entries
-function displayLeaderboardEntries(entries, gameMode) {
+function displayLeaderboardEntries(entries, gameMode, difficulty) {
     const contentArea = document.getElementById('leaderboardContent');
     
     if (entries.length === 0) {
+        const modeLabel = gameMode === 'challenge' ? 'Challenge' : 'Streak';
+        const difficultyLabel = difficulty === 'easy' ? 'Easy' : 'Hard';
         contentArea.innerHTML = `
             <div class="leaderboard-empty">
-                No scores yet for ${gameMode} mode.<br>
-                Be the first to set a record!
+                <p>No ${modeLabel} Mode scores yet for ${difficultyLabel} difficulty!</p>
+                <p>Be the first to submit a score!</p>
             </div>
         `;
         return;

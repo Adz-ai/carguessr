@@ -7,70 +7,83 @@ import (
 )
 
 type Scraper struct {
-	motorsScraper     *MotorsUKScraper
-	collectingCars    *CollectingCarsScraper
-	bonhamsScraper    *BonhamsScraper
-	useCollectingCars bool
-	useBonhams        bool
+	bonhamsScraper *BonhamsScraper
+	lookersScraper *LookersScraper
 }
 
 func New() *Scraper {
 	return &Scraper{
-		motorsScraper:     NewMotorsUKScraper(),
-		collectingCars:    NewCollectingCarsScraper(),
-		bonhamsScraper:    NewBonhamsScraper(),
-		useCollectingCars: false, // Disabled
-		useBonhams:        true,  // Use Bonhams as primary scraper
+		bonhamsScraper: NewBonhamsScraper(),
+		lookersScraper: NewLookersScraper(),
 	}
-}
-
-// SetCollectingCarsCredentials sets the login credentials for Collecting Cars
-func (s *Scraper) SetCollectingCarsCredentials(email, password string) {
-	s.collectingCars.SetCredentials(email, password)
 }
 
 // GetBonhamsListings gets Bonhams car listings directly
 func (s *Scraper) GetBonhamsListings(maxListings int) ([]*models.BonhamsCar, error) {
-	if s.useBonhams {
-		fmt.Println("Fetching Bonhams data directly...")
-		return s.bonhamsScraper.ScrapeCarListings(maxListings)
-	}
-	return nil, fmt.Errorf("bonhams scraper is not enabled")
+	fmt.Println("Fetching Bonhams data directly...")
+	return s.bonhamsScraper.ScrapeCarListings(maxListings)
 }
 
-// GetCarListings gets car listings from the configured source
+// GetCarListings gets car listings from Bonhams (legacy method - use GetEnhancedListings instead)
 func (s *Scraper) GetCarListings(maxListings int) ([]*models.Car, error) {
-	if s.useBonhams {
-		fmt.Println("Fetching data from Bonhams Car Auctions...")
-		bonhamsCars, err := s.bonhamsScraper.ScrapeCarListings(maxListings)
+	fmt.Println("Fetching data from Bonhams Car Auctions...")
+	bonhamsCars, err := s.bonhamsScraper.ScrapeCarListings(maxListings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert BonhamsCar to standard Car models
+	var cars []*models.Car
+	for _, bonhamsCar := range bonhamsCars {
+		cars = append(cars, bonhamsCar.ToStandardCar())
+	}
+	return cars, nil
+}
+
+// GetLookersListings gets Lookers car listings for Easy mode
+func (s *Scraper) GetLookersListings() ([]*models.LookersCar, error) {
+	fmt.Println("Fetching Lookers data for Easy mode...")
+	return s.lookersScraper.ScrapeCarListings()
+}
+
+// GetEnhancedListings gets enhanced car listings based on difficulty
+func (s *Scraper) GetEnhancedListings(difficulty string) ([]*models.EnhancedCar, error) {
+	if difficulty == "easy" {
+		fmt.Println("Fetching Easy mode data from Lookers...")
+		lookersCars, err := s.GetLookersListings()
 		if err != nil {
 			return nil, err
 		}
 
-		// Convert BonhamsCar to standard Car models
-		var cars []*models.Car
-		for _, bonhamsCar := range bonhamsCars {
-			cars = append(cars, bonhamsCar.ToStandardCar())
+		// Convert LookersCar to EnhancedCar models
+		var enhancedCars []*models.EnhancedCar
+		for _, lookersCar := range lookersCars {
+			enhancedCars = append(enhancedCars, lookersCar.ToEnhancedCar())
 		}
-		return cars, nil
+		return enhancedCars, nil
+	} else {
+		// Default to hard mode (Bonhams)
+		fmt.Println("Fetching Hard mode data from Bonhams...")
+		bonhamsCars, err := s.GetBonhamsListings(50) // Get more for variety
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert BonhamsCar to EnhancedCar models
+		var enhancedCars []*models.EnhancedCar
+		for _, bonhamsCar := range bonhamsCars {
+			enhancedCars = append(enhancedCars, bonhamsCar.ToEnhancedCar())
+		}
+		return enhancedCars, nil
 	}
-
-	if s.useCollectingCars {
-		fmt.Println("Fetching data from Collecting Cars...")
-		return s.collectingCars.ScrapeCarListings(maxListings)
-	}
-
-	s.motorsScraper.Enable()
-	fmt.Println("Fetching real Motors.co.uk data...")
-	return s.motorsScraper.ScrapeCarListings(maxListings)
-}
-
-// ScrapeMotors wraps the Motors scraper for backward compatibility
-func (s *Scraper) ScrapeMotors() ([]*models.Car, error) {
-	return s.GetCarListings(20)
 }
 
 // Close closes any open browser connections
 func (s *Scraper) Close() {
-	// The MotorsUKScraper manages its own browser lifecycle
+	if s.bonhamsScraper != nil {
+		s.bonhamsScraper.Close()
+	}
+	if s.lookersScraper != nil {
+		s.lookersScraper.Close()
+	}
 }

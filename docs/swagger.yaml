@@ -148,6 +148,12 @@ definitions:
     type: object
   models.GuessRequest:
     properties:
+      difficulty:
+        description: Default to hard for backward compatibility
+        enum:
+        - easy
+        - hard
+        type: string
       gameMode:
         enum:
         - zero
@@ -189,26 +195,62 @@ definitions:
     properties:
       date:
         type: string
+      difficulty:
+        description: '"easy" or "hard", defaults to "hard" for backward compatibility'
+        type: string
       gameMode:
         type: string
+      id:
+        type: string
       name:
+        maxLength: 20
+        minLength: 1
         type: string
       score:
         type: integer
+    required:
+    - name
+    type: object
+  models.LeaderboardSubmissionRequest:
+    properties:
+      difficulty:
+        description: Default to hard for backward compatibility
+        enum:
+        - easy
+        - hard
+        type: string
+      gameMode:
+        enum:
+        - streak
+        - challenge
+        type: string
+      name:
+        maxLength: 20
+        minLength: 1
+        type: string
+      score:
+        minimum: 0
+        type: integer
+      sessionId:
+        type: string
+    required:
+    - gameMode
+    - name
+    - score
     type: object
 host: localhost:8080
 info:
   contact:
-    name: Motors Price Guesser Support
-    url: https://github.com/your-repo/motors-price-guesser/issues
+    name: CarGuessr Support
+    url: https://github.com/your-repo/carguessr/issues
   description: A fun car price guessing game with multiple game modes using real Bonhams
     Car Auction data. Now with enhanced security, rate limiting, and 250 cars with
     7-day refresh cycles.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-  termsOfService: https://github.com/your-repo/motors-price-guesser
-  title: Motors Price Guesser API
+  termsOfService: https://carguessr.uk
+  title: CarGuessr API
   version: "2.1"
 paths:
   /api/admin/cache-status:
@@ -238,6 +280,35 @@ paths:
       security:
       - AdminKey: []
       summary: Get cache status information (Admin Only)
+      tags:
+      - admin
+  /api/admin/leaderboard-status:
+    get:
+      description: Returns information about the leaderboard file, entry counts, and
+        storage details. Requires admin authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: leaderboard status information
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 'error: Unauthorized - Admin key required'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - AdminKey: []
+      summary: Get leaderboard status information (Admin Only)
       tags:
       - admin
   /api/admin/listings:
@@ -272,9 +343,20 @@ paths:
       - admin
   /api/admin/refresh-listings:
     post:
-      description: Triggers a non-blocking background refresh of car listings from
-        Bonhams. Requires admin authentication and has a 30-minute cooldown between
-        requests. Game continues normally during refresh.
+      description: Triggers a non-blocking background refresh of car listings. Supports
+        mode query param (bonhams/lookers/both). Requires admin authentication and
+        has a 30-minute cooldown between requests. Game continues normally during
+        refresh.
+      parameters:
+      - default: both
+        description: Refresh mode (bonhams, lookers, both)
+        enum:
+        - bonhams
+        - lookers
+        - both
+        in: query
+        name: mode
+        type: string
       produces:
       - application/json
       responses:
@@ -304,8 +386,8 @@ paths:
       - admin
   /api/admin/test-scraper:
     get:
-      description: Tests the AutoTrader scraper and returns up to 10 cars with full
-        details. This is an expensive operation. Requires admin authentication.
+      description: Tests the Bonhams scraper and returns up to 10 cars with full details.
+        This is an expensive operation. Requires admin authentication.
       produces:
       - application/json
       responses:
@@ -413,8 +495,16 @@ paths:
   /api/challenge/start:
     post:
       description: Starts a new 10-car challenge session with GeoGuessr-style scoring.
-        Players get up to 5000 points per car based on guess accuracy. Rate limited
-        to 60 requests per minute per IP.
+        Supports difficulty query param (easy/hard). Rate limited to 60 requests per
+        minute per IP.
+      parameters:
+      - description: Difficulty mode (easy for Lookers, hard for Bonhams)
+        enum:
+        - easy
+        - hard
+        in: query
+        name: difficulty
+        type: string
       produces:
       - application/json
       responses:
@@ -481,14 +571,13 @@ paths:
       - game
   /api/data-source:
     get:
-      description: Returns information about the data source (Bonhams Car Auctions)
-        including total listings count
+      description: Returns information about both data sources (Bonhams and Lookers)
+        including listing counts
       produces:
       - application/json
       responses:
         "200":
-          description: 'data_source: bonhams_auctions, total_listings: count, description:
-            Real Bonhams Car Auction results'
+          description: data sources info with Easy/Hard mode listings
           schema:
             additionalProperties: true
             type: object
@@ -497,12 +586,21 @@ paths:
       - debug
   /api/leaderboard:
     get:
-      description: Returns the leaderboard optionally filtered by game mode
+      description: Returns the leaderboard optionally filtered by game mode and difficulty,
+        sorted by score (descending for challenge, ascending for streak)
       parameters:
-      - description: Game mode filter (zero or streak)
+      - description: Game mode filter (streak or challenge)
         in: query
         name: mode
         type: string
+      - description: Difficulty filter (easy or hard)
+        in: query
+        name: difficulty
+        type: string
+      - description: 'Maximum number of entries to return (default: 10)'
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
@@ -515,10 +613,54 @@ paths:
       summary: Get the game leaderboard
       tags:
       - game
+  /api/leaderboard/submit:
+    post:
+      consumes:
+      - application/json
+      description: Submit a score to the leaderboard for streak or challenge mode.
+        Validates the score against the session data.
+      parameters:
+      - description: Score submission data
+        in: body
+        name: submission
+        required: true
+        schema:
+          $ref: '#/definitions/models.LeaderboardSubmissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success message and leaderboard position
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'error: Invalid request or score validation failed'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: 'error: Too Many Requests - Rate limited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a score to the leaderboard
+      tags:
+      - game
   /api/random-enhanced-listing:
     get:
-      description: Returns a random car listing with full auction details and characteristics,
-        price hidden for guessing
+      description: Returns a random car listing with full details, supports difficulty
+        query param (easy/hard)
+      parameters:
+      - description: Difficulty mode (easy for Lookers, hard for Bonhams)
+        enum:
+        - easy
+        - hard
+        in: query
+        name: difficulty
+        type: string
       produces:
       - application/json
       responses:
@@ -532,7 +674,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Get a random car listing with all Bonhams characteristics
+      summary: Get a random car listing with all characteristics based on difficulty
       tags:
       - game
   /api/random-listing:

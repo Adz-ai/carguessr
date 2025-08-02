@@ -26,35 +26,49 @@ import (
 const ListingAmount int = 250
 
 type Handler struct {
-	scraper           *scraper.Scraper
-	bonhamsListings   map[string]*models.BonhamsCar // Only store Bonhams data
-	leaderboard       []models.LeaderboardEntry
-	mu                sync.RWMutex
-	zeroScores        map[string]float64
-	streakScores      map[string]int
-	challengeSessions map[string]*models.ChallengeSession // Store challenge sessions
-	refreshTicker     *time.Ticker
+	scraper              *scraper.Scraper
+	bonhamsListings      map[string]*models.BonhamsCar // Hard mode data
+	lookersListings      map[string]*models.LookersCar // Easy mode data
+	leaderboard          []models.LeaderboardEntry
+	mu                   sync.RWMutex
+	zeroScores           map[string]float64
+	streakScores         map[string]int
+	challengeSessions    map[string]*models.ChallengeSession // Store challenge sessions
+	bonhamsRefreshTicker *time.Ticker                        // Auto-refresh for Bonhams (7 days)
+	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
 }
 
 func NewHandler() *Handler {
 	h := &Handler{
 		scraper:           scraper.New(),
 		bonhamsListings:   make(map[string]*models.BonhamsCar),
+		lookersListings:   make(map[string]*models.LookersCar),
 		leaderboard:       make([]models.LeaderboardEntry, 0),
 		zeroScores:        make(map[string]float64),
 		streakScores:      make(map[string]int),
 		challengeSessions: make(map[string]*models.ChallengeSession),
 	}
 
-	// Initialize with cached or fresh data
-	h.initializeListings()
+	// Initialize both scrapers before starting (both modes must be ready)
+	fmt.Println("🚀 Initializing CarGuessr data sources...")
+	fmt.Println("   📊 Both Hard Mode (Bonhams) and Easy Mode (Lookers) must be ready before startup")
+
+	h.initializeBonhamsListings()
+	h.initializeLookersListings()
+
+	// Verify both data sources are ready
+	h.verifyDataSourcesReady()
+	fmt.Println("✅ All game modes ready for play!")
 
 	// Load leaderboard from persistent storage
 	h.initializeLeaderboard()
 
-	// Start automatic refresh timer (every 7 days)
+	// Start automatic refresh timers
 	h.startAutoRefresh()
-	fmt.Printf("🔄 Auto-refresh scheduled every 7 days (next refresh: %s)\n",
+	fmt.Printf("🔄 Auto-refresh scheduled:\n")
+	fmt.Printf("  Bonhams (Hard): every 7 days (next: %s)\n",
+		time.Now().Add(7*24*time.Hour).Format("Mon, 02 Jan 2006 15:04"))
+	fmt.Printf("  Lookers (Easy): every 7 days (next: %s)\n",
 		time.Now().Add(7*24*time.Hour).Format("Mon, 02 Jan 2006 15:04"))
 
 	return h
@@ -96,32 +110,65 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 }
 
 // GetRandomEnhancedListing godoc
-// @Summary Get a random car listing with all Bonhams characteristics
-// @Description Returns a random car listing with full auction details and characteristics, price hidden for guessing
+// @Summary Get a random car listing with all characteristics based on difficulty
+// @Description Returns a random car listing with full details, supports difficulty query param (easy/hard)
 // @Tags game
 // @Produce json
+// @Param difficulty query string false "Difficulty mode (easy for Lookers, hard for Bonhams)" Enums(easy, hard)
 // @Success 200 {object} models.EnhancedCar
 // @Failure 404 {object} map[string]string "error: No listings available"
 // @Router /api/random-enhanced-listing [get]
 func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
+	difficulty := c.DefaultQuery("difficulty", "hard") // Default to hard mode for backward compatibility
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// Get all Bonhams listing IDs
-	ids := make([]string, 0, len(h.bonhamsListings))
-	for id := range h.bonhamsListings {
-		ids = append(ids, id)
+	if difficulty == "easy" {
+		// Easy mode - use Lookers listings
+		if len(h.lookersListings) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No easy mode listings available"})
+			return
+		}
+
+		// Get all Lookers listing IDs
+		ids := make([]string, 0, len(h.lookersListings))
+		for id := range h.lookersListings {
+			ids = append(ids, id)
+		}
+
+		// Select random listing
+		randomID := ids[rand.Intn(len(ids))]
+		lookersListing := h.lookersListings[randomID]
+
+		// Convert to enhanced format and hide price
+		enhancedListing := lookersListing.ToEnhancedCar()
+		enhancedListing.Price = 0
+
+		c.JSON(http.StatusOK, enhancedListing)
+	} else {
+		// Hard mode - use Bonhams listings (default)
+		if len(h.bonhamsListings) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No hard mode listings available"})
+			return
+		}
+
+		// Get all Bonhams listing IDs
+		ids := make([]string, 0, len(h.bonhamsListings))
+		for id := range h.bonhamsListings {
+			ids = append(ids, id)
+		}
+
+		// Select random listing
+		randomID := ids[rand.Intn(len(ids))]
+		bonhamsListing := h.bonhamsListings[randomID]
+
+		// Convert to enhanced format and hide price
+		enhancedListing := bonhamsListing.ToEnhancedCar()
+		enhancedListing.Price = 0
+
+		c.JSON(http.StatusOK, enhancedListing)
 	}
-
-	// Select random listing
-	randomID := ids[rand.Intn(len(ids))]
-	bonhamsListing := h.bonhamsListings[randomID]
-
-	// Convert to enhanced format and hide price
-	enhancedListing := bonhamsListing.ToEnhancedCar()
-	enhancedListing.Price = 0
-
-	c.JSON(http.StatusOK, enhancedListing)
 }
 
 // CheckGuess godoc
@@ -168,26 +215,52 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 	}
 
 	h.mu.RLock()
-	bonhamsListing, exists := h.bonhamsListings[req.ListingID]
+
+	// Try to find the listing in the appropriate difficulty mode
+	var actualPrice float64
+	var originalURL string
+	var exists bool
+
+	difficulty := req.Difficulty
+	if difficulty == "" {
+		difficulty = "hard" // Default to hard mode for backward compatibility
+	}
+
+	if difficulty == "easy" {
+		// Check Lookers listings
+		if lookersListing, found := h.lookersListings[req.ListingID]; found {
+			actualPrice = lookersListing.Price
+			originalURL = lookersListing.OriginalURL
+			exists = true
+		}
+	} else {
+		// Check Bonhams listings (hard mode)
+		if bonhamsListing, found := h.bonhamsListings[req.ListingID]; found {
+			actualPrice = bonhamsListing.Price
+			originalURL = bonhamsListing.OriginalURL
+			exists = true
+		}
+	}
+
 	h.mu.RUnlock()
 
 	if !exists {
-		log.Printf("CheckGuess: Listing not found - ID: %s", req.ListingID)
-		log.Printf("CheckGuess: Available listings: %d", len(h.bonhamsListings))
-		c.JSON(http.StatusNotFound, gin.H{"error": "Listing not found", "requestedId": req.ListingID})
+		log.Printf("CheckGuess: Listing not found - ID: %s, Difficulty: %s", req.ListingID, difficulty)
+		log.Printf("CheckGuess: Available listings (Hard): %d, (Easy): %d", len(h.bonhamsListings), len(h.lookersListings))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Listing not found", "requestedId": req.ListingID, "difficulty": difficulty})
 		return
 	}
 
 	// Calculate difference and percentage
-	difference := math.Abs(bonhamsListing.Price - req.GuessedPrice)
-	percentage := (difference / bonhamsListing.Price) * 100
+	difference := math.Abs(actualPrice - req.GuessedPrice)
+	percentage := (difference / actualPrice) * 100
 
 	response := models.GuessResponse{
-		ActualPrice:  bonhamsListing.Price,
+		ActualPrice:  actualPrice,
 		GuessedPrice: req.GuessedPrice,
 		Difference:   difference,
 		Percentage:   percentage,
-		OriginalURL:  bonhamsListing.OriginalURL,
+		OriginalURL:  originalURL,
 	}
 
 	// Handle game mode logic
@@ -230,10 +303,11 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 
 // GetLeaderboard godoc
 // @Summary Get the game leaderboard
-// @Description Returns the leaderboard optionally filtered by game mode, sorted by score (descending for challenge, ascending for streak)
+// @Description Returns the leaderboard optionally filtered by game mode and difficulty, sorted by score (descending for challenge, ascending for streak)
 // @Tags game
 // @Produce json
 // @Param mode query string false "Game mode filter (streak or challenge)"
+// @Param difficulty query string false "Difficulty filter (easy or hard)"
 // @Param limit query int false "Maximum number of entries to return (default: 10)"
 // @Success 200 {array} models.LeaderboardEntry
 // @Router /api/leaderboard [get]
@@ -242,6 +316,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	defer h.mu.RUnlock()
 
 	gameMode := c.Query("mode")
+	difficulty := c.Query("difficulty")
 	limit := 10 // Default limit
 
 	// Parse limit if provided
@@ -251,12 +326,24 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 		}
 	}
 
-	// Filter leaderboard by game mode if specified
+	// Filter leaderboard by game mode and difficulty if specified
 	filtered := make([]models.LeaderboardEntry, 0)
 	for _, entry := range h.leaderboard {
-		if gameMode == "" || entry.GameMode == gameMode {
-			filtered = append(filtered, entry)
+		// Filter by game mode
+		if gameMode != "" && entry.GameMode != gameMode {
+			continue
 		}
+
+		// Filter by difficulty (default to "hard" for backward compatibility)
+		entryDifficulty := entry.Difficulty
+		if entryDifficulty == "" {
+			entryDifficulty = "hard" // Default for legacy entries
+		}
+		if difficulty != "" && entryDifficulty != difficulty {
+			continue
+		}
+
+		filtered = append(filtered, entry)
 	}
 
 	// Sort by score - challenge mode: highest first, streak mode: highest first
@@ -323,22 +410,42 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 	// In a production environment, you'd want to validate this against session data too
 
 	// Create leaderboard entry
+	difficulty := req.Difficulty
+	if difficulty == "" {
+		difficulty = "hard" // Default to hard for backward compatibility
+	}
+
 	entry := models.LeaderboardEntry{
-		Name:     req.Name,
-		Score:    req.Score,
-		GameMode: req.GameMode,
-		Date:     time.Now().Format("2006-01-02 15:04:05"),
-		ID:       generateSessionID(),
+		Name:       req.Name,
+		Score:      req.Score,
+		GameMode:   req.GameMode,
+		Difficulty: difficulty,
+		Date:       time.Now().Format("2006-01-02 15:04:05"),
+		ID:         generateSessionID(),
 	}
 
 	// Add to leaderboard
 	h.leaderboard = append(h.leaderboard, entry)
 
-	// Sort leaderboard by score (highest first)
+	// Sort leaderboard by game mode, difficulty, then score (highest first)
 	sort.Slice(h.leaderboard, func(i, j int) bool {
+		// First sort by game mode
 		if h.leaderboard[i].GameMode != h.leaderboard[j].GameMode {
 			return h.leaderboard[i].GameMode < h.leaderboard[j].GameMode
 		}
+		// Then sort by difficulty (easy < hard)
+		difficultyI := h.leaderboard[i].Difficulty
+		if difficultyI == "" {
+			difficultyI = "hard" // Default for legacy entries
+		}
+		difficultyJ := h.leaderboard[j].Difficulty
+		if difficultyJ == "" {
+			difficultyJ = "hard" // Default for legacy entries
+		}
+		if difficultyI != difficultyJ {
+			return difficultyI < difficultyJ
+		}
+		// Finally sort by score (highest first)
 		return h.leaderboard[i].Score > h.leaderboard[j].Score
 	})
 
@@ -360,7 +467,7 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 
 // TestScraper godoc
 // @Summary Test the car scraper directly (Admin Only)
-// @Description Tests the AutoTrader scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.
+// @Description Tests the Bonhams scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.
 // @Tags admin
 // @Security AdminKey
 // @Produce json
@@ -396,20 +503,30 @@ func (h *Handler) TestScraper(c *gin.Context) {
 
 // GetDataSource godoc
 // @Summary Get current data source information
-// @Description Returns information about the data source (Bonhams Car Auctions) including total listings count
+// @Description Returns information about both data sources (Bonhams and Lookers) including listing counts
 // @Tags debug
 // @Produce json
-// @Success 200 {object} map[string]interface{} "data_source: bonhams_auctions, total_listings: count, description: Real Bonhams Car Auction results"
+// @Success 200 {object} map[string]interface{} "data sources info with Easy/Hard mode listings"
 // @Router /api/data-source [get]
 func (h *Handler) GetDataSource(c *gin.Context) {
 	h.mu.RLock()
-	totalListings := len(h.bonhamsListings)
+	bonhamsListings := len(h.bonhamsListings)
+	lookersListings := len(h.lookersListings)
 	h.mu.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
-		"data_source":    "bonhams_auctions",
-		"total_listings": totalListings,
-		"description":    "Real Bonhams Car Auction results",
+		"hard_mode": gin.H{
+			"data_source":    "bonhams_auctions",
+			"total_listings": bonhamsListings,
+			"description":    "Real Bonhams Car Auction results (Hard Mode)",
+		},
+		"easy_mode": gin.H{
+			"data_source":    "lookers_dealership",
+			"total_listings": lookersListings,
+			"description":    "Lookers used car dealership listings (Easy Mode)",
+		},
+		"total_listings":  bonhamsListings + lookersListings,
+		"modes_available": []string{"easy", "hard"},
 	})
 }
 
@@ -438,18 +555,21 @@ func (h *Handler) GetAllListings(c *gin.Context) {
 	})
 }
 
-func (h *Handler) initializeListings() {
+func (h *Handler) initializeBonhamsListings() {
+	fmt.Println("🔄 Initializing Bonhams listings for Hard mode...")
+
 	// Try to load from cache first
-	if cachedListings, found := cache.LoadFromCache(); found {
-		h.loadListingsFromCache(cachedListings)
+	if cachedListings, found := cache.LoadBonhamsFromCache(); found {
+		h.loadBonhamsListingsFromCache(cachedListings)
 		return
 	}
 
-	// Cache miss or expired, scrape fresh data
-	h.refreshListings()
+	// Cache miss or expired, scrape fresh data (blocking to ensure Hard mode is ready)
+	fmt.Println("📥 No Bonhams cache found - scraping fresh data before startup...")
+	h.refreshBonhamsListings()
 }
 
-func (h *Handler) loadListingsFromCache(cachedListings []*models.BonhamsCar) {
+func (h *Handler) loadBonhamsListingsFromCache(cachedListings []*models.BonhamsCar) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -468,7 +588,58 @@ func (h *Handler) loadListingsFromCache(cachedListings []*models.BonhamsCar) {
 	}
 }
 
-func (h *Handler) refreshListings() {
+// loadLookersFromCache loads Lookers listings from cache
+func (h *Handler) loadLookersFromCache(cachedListings []*models.LookersCar) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Load Lookers listings
+	for _, lookersCar := range cachedListings {
+		h.lookersListings[lookersCar.ID] = lookersCar
+	}
+
+	fmt.Printf("✅ Loaded %d Lookers cars from cache\n", len(cachedListings))
+}
+
+// verifyDataSourcesReady ensures both Hard and Easy modes have data available
+func (h *Handler) verifyDataSourcesReady() {
+	h.mu.RLock()
+	bonhamsCount := len(h.bonhamsListings)
+	lookersCount := len(h.lookersListings)
+	h.mu.RUnlock()
+
+	fmt.Printf("🔍 Data source verification:\n")
+	fmt.Printf("   Hard Mode (Bonhams): %d cars loaded\n", bonhamsCount)
+	fmt.Printf("   Easy Mode (Lookers): %d cars loaded\n", lookersCount)
+
+	if bonhamsCount == 0 {
+		fmt.Println("❌ WARNING: Hard Mode has no cars - users will see errors!")
+	}
+	if lookersCount == 0 {
+		fmt.Println("❌ WARNING: Easy Mode has no cars - users will see errors!")
+	}
+
+	if bonhamsCount > 0 && lookersCount > 0 {
+		fmt.Println("✅ Both game modes have sufficient data")
+	}
+}
+
+// initializeLookersListings initializes Lookers listings for Easy mode
+func (h *Handler) initializeLookersListings() {
+	fmt.Println("🔄 Initializing Lookers listings for Easy mode...")
+
+	// Try to load from cache first
+	if cachedListings, found := cache.LoadLookersFromCache(); found {
+		h.loadLookersFromCache(cachedListings)
+		return
+	}
+
+	// Cache miss or expired, scrape fresh data (blocking to ensure Easy mode is ready)
+	fmt.Println("📥 No Lookers cache found - scraping fresh data before startup...")
+	h.refreshLookersListings()
+}
+
+func (h *Handler) refreshBonhamsListings() {
 	fmt.Println("🔄 Refreshing listings from Bonhams Car Auctions...")
 
 	// Get fresh Bonhams data (250 cars with parallel scraping)
@@ -495,8 +666,8 @@ func (h *Handler) refreshListings() {
 		h.mu.Unlock()
 
 		// Save filtered listings to cache
-		if err := cache.SaveToCache(validCars); err != nil {
-			fmt.Printf("⚠️ Failed to save cache: %v\n", err)
+		if err := cache.SaveBonhamsToCache(validCars); err != nil {
+			fmt.Printf("⚠️ Failed to save Bonhams cache: %v\n", err)
 		}
 
 		fmt.Printf("✅ Refreshed %d valid cars from Bonhams Car Auctions (%d filtered out)\n", len(validCars), len(bonhamsCars)-len(validCars))
@@ -535,24 +706,71 @@ func (h *Handler) refreshListings() {
 	}
 }
 
-// startAutoRefresh starts a background goroutine that refreshes listings every 7 days
+// startAutoRefresh starts background goroutines that refresh listings on different schedules
 func (h *Handler) startAutoRefresh() {
-	// Create ticker for 7-day intervals
-	h.refreshTicker = time.NewTicker(7 * 24 * time.Hour)
+	// Create ticker for Bonhams (Hard mode) - 7-day intervals
+	h.bonhamsRefreshTicker = time.NewTicker(7 * 24 * time.Hour)
 
+	// Create ticker for Lookers (Easy mode) - 7-day intervals
+	h.lookersRefreshTicker = time.NewTicker(7 * 24 * time.Hour)
+
+	// Bonhams auto-refresh goroutine
 	go func() {
-		for range h.refreshTicker.C {
-			fmt.Println("⏰ Auto-refresh triggered (7 days elapsed)")
-			// Run refresh in background to avoid blocking gameplay
-			go h.refreshListingsAsync()
+		for range h.bonhamsRefreshTicker.C {
+			fmt.Println("⏰ Bonhams auto-refresh triggered (7 days elapsed)")
+			// Check for active games before refreshing
+			if h.hasActiveGames() {
+				fmt.Println("⚠️ Active games detected, postponing Bonhams refresh for 1 hour")
+				time.AfterFunc(1*time.Hour, func() {
+					go h.refreshBonhamsListingsAsync()
+				})
+			} else {
+				// Run refresh in background to avoid blocking gameplay
+				go h.refreshBonhamsListingsAsync()
+			}
 		}
 	}()
 
-	fmt.Println("🔄 Auto-refresh scheduled every 24 hours")
+	// Lookers auto-refresh goroutine
+	go func() {
+		for range h.lookersRefreshTicker.C {
+			fmt.Println("⏰ Lookers auto-refresh triggered (7 days elapsed)")
+			// Check for active games before refreshing
+			if h.hasActiveGames() {
+				fmt.Println("⚠️ Active games detected, postponing Lookers refresh for 1 hour")
+				time.AfterFunc(1*time.Hour, func() {
+					go h.refreshLookersListingsAsync()
+				})
+			} else {
+				// Run refresh in background to avoid blocking gameplay
+				go h.refreshLookersListingsAsync()
+			}
+		}
+	}()
+}
+
+// hasActiveGames checks if there are any active game sessions or challenge sessions
+func (h *Handler) hasActiveGames() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// Check for active challenge sessions (incomplete sessions)
+	for _, session := range h.challengeSessions {
+		if !session.IsComplete {
+			return true
+		}
+	}
+
+	// Check for active streak/zero mode sessions (non-zero scores indicate active games)
+	if len(h.streakScores) > 0 || len(h.zeroScores) > 0 {
+		return true
+	}
+
+	return false
 }
 
 // refreshListingsAsync performs a non-blocking refresh that doesn't interrupt gameplay
-func (h *Handler) refreshListingsAsync() {
+func (h *Handler) refreshBonhamsListingsAsync() {
 	fmt.Println("🔄 Starting background refresh (non-blocking)...")
 
 	// Get fresh Bonhams data (this may take a few minutes) - 250 cars with parallel scraping
@@ -585,44 +803,150 @@ func (h *Handler) refreshListingsAsync() {
 	h.mu.Unlock()
 
 	// Save to cache (this can take time, but doesn't block gameplay)
-	if err := cache.SaveToCache(validCars); err != nil {
-		fmt.Printf("⚠️ Failed to save cache during background refresh: %v\n", err)
+	if err := cache.SaveBonhamsToCache(validCars); err != nil {
+		fmt.Printf("⚠️ Failed to save Bonhams cache during background refresh: %v\n", err)
 	}
 
 	fmt.Printf("✅ Background refresh complete: %d cars updated (was %d, filtered %d)\n",
 		len(validCars), oldCount, len(bonhamsCars)-len(validCars))
 }
 
-// StopAutoRefresh stops the automatic refresh ticker (useful for cleanup)
+// refreshLookersListings refreshes Lookers listings for Easy mode
+func (h *Handler) refreshLookersListings() {
+	fmt.Println("🔄 Refreshing Lookers listings for Easy mode...")
+
+	// Get fresh Lookers data (scraper is now stateless)
+	lookersCars, err := h.scraper.GetLookersListings()
+	if err != nil {
+		fmt.Printf("❌ Lookers scraper failed: %v\n", err)
+		return
+	}
+
+	if len(lookersCars) == 0 {
+		fmt.Println("❌ Lookers scraper returned no cars")
+		return
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Clear existing Lookers listings
+	h.lookersListings = make(map[string]*models.LookersCar)
+
+	// Load Lookers listings
+	for _, lookersCar := range lookersCars {
+		h.lookersListings[lookersCar.ID] = lookersCar
+	}
+
+	// Save to cache
+	if err := cache.SaveLookersToCache(lookersCars); err != nil {
+		fmt.Printf("⚠️ Failed to save Lookers cache: %v\n", err)
+	}
+
+	fmt.Printf("✅ Refreshed %d cars from Lookers for Easy mode\n", len(lookersCars))
+}
+
+// refreshLookersListingsAsync performs a non-blocking Lookers refresh that doesn't interrupt gameplay
+func (h *Handler) refreshLookersListingsAsync() {
+	fmt.Println("🔄 Starting Lookers background refresh (non-blocking)...")
+
+	// Get fresh Lookers data (scraper is now stateless)
+	lookersCars, err := h.scraper.GetLookersListings()
+	if err != nil {
+		fmt.Printf("❌ Lookers background refresh failed: %v\n", err)
+		return
+	}
+
+	if len(lookersCars) == 0 {
+		fmt.Println("❌ Lookers background refresh returned no cars")
+		return
+	}
+
+	// Quick atomic update - only lock briefly
+	h.mu.Lock()
+	oldCount := len(h.lookersListings)
+	h.lookersListings = make(map[string]*models.LookersCar)
+	for _, lookersCar := range lookersCars {
+		h.lookersListings[lookersCar.ID] = lookersCar
+	}
+	h.mu.Unlock()
+
+	// Save to cache (this can take time, but doesn't block gameplay)
+	if err := cache.SaveLookersToCache(lookersCars); err != nil {
+		fmt.Printf("⚠️ Failed to save Lookers cache during background refresh: %v\n", err)
+	}
+
+	fmt.Printf("✅ Lookers background refresh complete: %d cars updated (was %d)\n",
+		len(lookersCars), oldCount)
+}
+
+// StopAutoRefresh stops the automatic refresh tickers (useful for cleanup)
 func (h *Handler) StopAutoRefresh() {
-	if h.refreshTicker != nil {
-		h.refreshTicker.Stop()
-		fmt.Println("🛑 Auto-refresh stopped")
+	if h.bonhamsRefreshTicker != nil {
+		h.bonhamsRefreshTicker.Stop()
+		fmt.Println("🛑 Bonhams auto-refresh stopped")
+	}
+	if h.lookersRefreshTicker != nil {
+		h.lookersRefreshTicker.Stop()
+		fmt.Println("🛑 Lookers auto-refresh stopped")
 	}
 }
 
 // ManualRefresh godoc
 // @Summary Manually refresh car listings (Admin Only)
-// @Description Triggers a non-blocking background refresh of car listings from Bonhams. Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.
+// @Description Triggers a non-blocking background refresh of car listings. Supports mode query param (bonhams/lookers/both). Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.
 // @Tags admin
 // @Security AdminKey
 // @Produce json
+// @Param mode query string false "Refresh mode (bonhams, lookers, both)" Enums(bonhams, lookers, both) default(both)
 // @Success 200 {object} map[string]interface{} "message: refresh started, status: refreshing, note: game continues normally"
 // @Failure 401 {object} map[string]string "error: Unauthorized - Admin key required"
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited or refresh cooldown active"
 // @Router /api/admin/refresh-listings [post]
 func (h *Handler) ManualRefresh(c *gin.Context) {
-	fmt.Println("🔄 Manual refresh requested")
+	mode := c.DefaultQuery("mode", "both") // Default to refreshing both
 
-	go func() {
-		h.refreshListingsAsync()
-	}()
+	fmt.Printf("🔄 Manual refresh requested for mode: %s\n", mode)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Manual refresh started in background (non-blocking)",
-		"status":  "refreshing",
-		"note":    "Game will continue normally while refresh happens in background",
-	})
+	switch mode {
+	case "bonhams":
+		go func() {
+			h.refreshBonhamsListingsAsync()
+		}()
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Bonhams refresh started in background (non-blocking)",
+			"status":  "refreshing",
+			"mode":    "bonhams",
+			"note":    "Game will continue normally while refresh happens in background",
+		})
+	case "lookers":
+		go func() {
+			h.refreshLookersListingsAsync()
+		}()
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Lookers refresh started in background (non-blocking)",
+			"status":  "refreshing",
+			"mode":    "lookers",
+			"note":    "Game will continue normally while refresh happens in background",
+		})
+	case "both":
+		go func() {
+			h.refreshBonhamsListingsAsync()
+		}()
+		go func() {
+			h.refreshLookersListingsAsync()
+		}()
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Both Bonhams and Lookers refresh started in background (non-blocking)",
+			"status":  "refreshing",
+			"mode":    "both",
+			"note":    "Game will continue normally while refresh happens in background",
+		})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid mode. Use: bonhams, lookers, or both",
+		})
+	}
 }
 
 // GetCacheStatus godoc
@@ -636,25 +960,44 @@ func (h *Handler) ManualRefresh(c *gin.Context) {
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/admin/cache-status [get]
 func (h *Handler) GetCacheStatus(c *gin.Context) {
-	age, err := cache.GetCacheAge()
-	expired := cache.IsCacheExpired()
+	bonhamsAge, bonhamsErr := cache.GetBonhamsCacheAge()
+	lookersAge, lookersErr := cache.GetLookersCacheAge()
+	bonhamsExpired := cache.IsBonhamsCacheExpired()
+	lookersExpired := cache.IsLookersCacheExpired()
 
 	h.mu.RLock()
 	bonhamsListings := len(h.bonhamsListings)
+	lookersListings := len(h.lookersListings)
 	h.mu.RUnlock()
 
 	status := gin.H{
-		"cache_expired":    expired,
-		"total_listings":   bonhamsListings,
-		"bonhams_listings": bonhamsListings,
-		"next_refresh_in":  "up to 12 hours",
+		"total_listings": bonhamsListings + lookersListings,
+		"bonhams": gin.H{
+			"listings":        bonhamsListings,
+			"cache_expired":   bonhamsExpired,
+			"next_refresh_in": "up to 7 days",
+		},
+		"lookers": gin.H{
+			"listings":        lookersListings,
+			"cache_expired":   lookersExpired,
+			"next_refresh_in": "up to 7 days",
+		},
 	}
 
-	if err == nil {
-		status["cache_age"] = age.Round(time.Minute).String()
-		status["cache_age_hours"] = age.Hours()
+	// Bonhams cache age
+	if bonhamsErr == nil {
+		status["bonhams"].(gin.H)["cache_age"] = bonhamsAge.Round(time.Hour).String()
+		status["bonhams"].(gin.H)["cache_age_hours"] = bonhamsAge.Hours()
 	} else {
-		status["cache_age"] = "no cache file"
+		status["bonhams"].(gin.H)["cache_age"] = "no cache file"
+	}
+
+	// Lookers cache age
+	if lookersErr == nil {
+		status["lookers"].(gin.H)["cache_age"] = lookersAge.Round(time.Hour).String()
+		status["lookers"].(gin.H)["cache_age_hours"] = lookersAge.Hours()
+	} else {
+		status["lookers"].(gin.H)["cache_age"] = "no cache file"
 	}
 
 	c.JSON(http.StatusOK, status)
@@ -662,40 +1005,73 @@ func (h *Handler) GetCacheStatus(c *gin.Context) {
 
 // StartChallenge godoc
 // @Summary Start a new Challenge Mode session
-// @Description Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy. Rate limited to 60 requests per minute per IP.
+// @Description Starts a new 10-car challenge session with GeoGuessr-style scoring. Supports difficulty query param (easy/hard). Rate limited to 60 requests per minute per IP.
 // @Tags challenge
 // @Produce json
+// @Param difficulty query string false "Difficulty mode (easy for Lookers, hard for Bonhams)" Enums(easy, hard)
 // @Success 200 {object} models.ChallengeSession "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0"
 // @Failure 404 {object} map[string]string "error: Not enough cars available for challenge mode"
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/challenge/start [post]
 func (h *Handler) StartChallenge(c *gin.Context) {
+	difficulty := c.DefaultQuery("difficulty", "hard") // Default to hard mode for backward compatibility
+
 	h.mu.RLock()
 
-	// Need at least 10 cars for a challenge
-	if len(h.bonhamsListings) < 10 {
-		h.mu.RUnlock()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Not enough cars available for challenge mode"})
-		return
-	}
+	var selectedCars []*models.EnhancedCar
 
-	// Select 10 random cars
-	var allCars []*models.BonhamsCar
-	for _, car := range h.bonhamsListings {
-		allCars = append(allCars, car)
-	}
-	h.mu.RUnlock() // Release read lock before processing
+	if difficulty == "easy" {
+		// Easy mode - use Lookers listings
+		if len(h.lookersListings) < 10 {
+			h.mu.RUnlock()
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not enough easy mode cars available for challenge mode"})
+			return
+		}
 
-	// Shuffle and select 10
-	rand.Shuffle(len(allCars), func(i, j int) {
-		allCars[i], allCars[j] = allCars[j], allCars[i]
-	})
+		// Select 10 random Lookers cars
+		var allCars []*models.LookersCar
+		for _, car := range h.lookersListings {
+			allCars = append(allCars, car)
+		}
+		h.mu.RUnlock() // Release read lock before processing
 
-	selectedCars := make([]*models.EnhancedCar, 10)
-	for i := 0; i < 10; i++ {
-		enhancedCar := allCars[i].ToEnhancedCar()
-		enhancedCar.Price = 0 // Hide price for guessing
-		selectedCars[i] = enhancedCar
+		// Shuffle and select 10
+		rand.Shuffle(len(allCars), func(i, j int) {
+			allCars[i], allCars[j] = allCars[j], allCars[i]
+		})
+
+		selectedCars = make([]*models.EnhancedCar, 10)
+		for i := 0; i < 10; i++ {
+			enhancedCar := allCars[i].ToEnhancedCar()
+			enhancedCar.Price = 0 // Hide price for guessing
+			selectedCars[i] = enhancedCar
+		}
+	} else {
+		// Hard mode - use Bonhams listings (default)
+		if len(h.bonhamsListings) < 10 {
+			h.mu.RUnlock()
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not enough hard mode cars available for challenge mode"})
+			return
+		}
+
+		// Select 10 random Bonhams cars
+		var allCars []*models.BonhamsCar
+		for _, car := range h.bonhamsListings {
+			allCars = append(allCars, car)
+		}
+		h.mu.RUnlock() // Release read lock before processing
+
+		// Shuffle and select 10
+		rand.Shuffle(len(allCars), func(i, j int) {
+			allCars[i], allCars[j] = allCars[j], allCars[i]
+		})
+
+		selectedCars = make([]*models.EnhancedCar, 10)
+		for i := 0; i < 10; i++ {
+			enhancedCar := allCars[i].ToEnhancedCar()
+			enhancedCar.Price = 0 // Hide price for guessing
+			selectedCars[i] = enhancedCar
+		}
 	}
 
 	// Create challenge session
@@ -806,16 +1182,32 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 	var actualPrice float64
 	var originalURL string
 
-	// Find the original car with the actual price
+	// Find the original car with the actual price (check both difficulty modes)
+	found := false
+
+	// Try Bonhams listings first (hard mode)
 	for _, bonhamsCar := range h.bonhamsListings {
 		if bonhamsCar.ID == currentCar.ID {
 			actualPrice = bonhamsCar.Price
 			originalURL = bonhamsCar.OriginalURL
+			found = true
 			break
 		}
 	}
 
-	if actualPrice == 0 {
+	// If not found in Bonhams, try Lookers listings (easy mode)
+	if !found {
+		for _, lookersCar := range h.lookersListings {
+			if lookersCar.ID == currentCar.ID {
+				actualPrice = lookersCar.Price
+				originalURL = lookersCar.OriginalURL
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found || actualPrice == 0 {
 		h.mu.Unlock()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not find actual price for this car"})
 		return
@@ -942,26 +1334,31 @@ func parseInt(s string) int {
 	return 0
 }
 
-// trimLeaderboard keeps only top 100 entries per game mode
+// trimLeaderboard keeps only top entries per game mode and difficulty combination
 func (h *Handler) trimLeaderboard() {
-	if len(h.leaderboard) <= 100 {
+	if len(h.leaderboard) <= 200 { // Increased limit since we have 2 difficulties now
 		return
 	}
 
-	// Group by game mode
+	// Group by game mode + difficulty combination
 	modeGroups := make(map[string][]models.LeaderboardEntry)
 	for _, entry := range h.leaderboard {
-		modeGroups[entry.GameMode] = append(modeGroups[entry.GameMode], entry)
+		difficulty := entry.Difficulty
+		if difficulty == "" {
+			difficulty = "hard" // Default for legacy entries
+		}
+		key := entry.GameMode + "_" + difficulty
+		modeGroups[key] = append(modeGroups[key], entry)
 	}
 
-	// Keep top 50 per mode
+	// Keep top 25 per mode+difficulty combination
 	h.leaderboard = make([]models.LeaderboardEntry, 0)
 	for _, entries := range modeGroups {
 		sort.Slice(entries, func(i, j int) bool {
 			return entries[i].Score > entries[j].Score
 		})
 
-		limit := 50
+		limit := 25 // 25 per combination = up to 100 total (2 game modes × 2 difficulties × 25)
 		if len(entries) < limit {
 			limit = len(entries)
 		}
@@ -1018,23 +1415,26 @@ func (h *Handler) GetLeaderboardStatus(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// Count entries by game mode
-	challengeCount := 0
-	streakCount := 0
+	// Count entries by game mode and difficulty
+	counts := make(map[string]int)
 	for _, entry := range h.leaderboard {
-		switch entry.GameMode {
-		case "challenge":
-			challengeCount++
-		case "streak":
-			streakCount++
+		difficulty := entry.Difficulty
+		if difficulty == "" {
+			difficulty = "hard" // Default for legacy entries
 		}
+		key := entry.GameMode + "_" + difficulty
+		counts[key]++
 	}
 
 	status := gin.H{
-		"total_entries":     len(h.leaderboard),
-		"challenge_entries": challengeCount,
-		"streak_entries":    streakCount,
-		"file_exists":       leaderboard.FileExists(),
+		"total_entries": len(h.leaderboard),
+		"breakdown": gin.H{
+			"challenge_easy": counts["challenge_easy"],
+			"challenge_hard": counts["challenge_hard"],
+			"streak_easy":    counts["streak_easy"],
+			"streak_hard":    counts["streak_hard"],
+		},
+		"file_exists": leaderboard.FileExists(),
 	}
 
 	if leaderboard.FileExists() {

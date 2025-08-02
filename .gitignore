@@ -44,5 +44,4 @@ vendor/
 # Compiled templates
 *.qtpl.go
 
-# Cache files
-listings_cache.json
+# Note: Cache files (bonhams_cache.json, lookers_cache.json) are now tracked in git under data/ folder

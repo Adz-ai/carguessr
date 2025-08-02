@@ -9,10 +9,10 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "https://github.com/your-repo/motors-price-guesser",
+        "termsOfService": "https://carguessr.uk",
         "contact": {
-            "name": "Motors Price Guesser Support",
-            "url": "https://github.com/your-repo/motors-price-guesser/issues"
+            "name": "CarGuessr Support",
+            "url": "https://github.com/your-repo/carguessr/issues"
         },
         "license": {
             "name": "MIT",
@@ -41,6 +41,50 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "cache status information",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "error: Unauthorized - Admin key required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/leaderboard-status": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Returns information about the leaderboard file, entry counts, and storage details. Requires admin authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get leaderboard status information (Admin Only)",
+                "responses": {
+                    "200": {
+                        "description": "leaderboard status information",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -118,7 +162,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "Triggers a non-blocking background refresh of car listings from Bonhams. Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.",
+                "description": "Triggers a non-blocking background refresh of car listings. Supports mode query param (bonhams/lookers/both). Requires admin authentication and has a 30-minute cooldown between requests. Game continues normally during refresh.",
                 "produces": [
                     "application/json"
                 ],
@@ -126,6 +170,20 @@ const docTemplate = `{
                     "admin"
                 ],
                 "summary": "Manually refresh car listings (Admin Only)",
+                "parameters": [
+                    {
+                        "enum": [
+                            "bonhams",
+                            "lookers",
+                            "both"
+                        ],
+                        "type": "string",
+                        "default": "both",
+                        "description": "Refresh mode (bonhams, lookers, both)",
+                        "name": "mode",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "message: refresh started, status: refreshing, note: game continues normally",
@@ -162,7 +220,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "Tests the AutoTrader scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.",
+                "description": "Tests the Bonhams scraper and returns up to 10 cars with full details. This is an expensive operation. Requires admin authentication.",
                 "produces": [
                     "application/json"
                 ],
@@ -210,7 +268,7 @@ const docTemplate = `{
         },
         "/api/challenge/start": {
             "post": {
-                "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Players get up to 5000 points per car based on guess accuracy. Rate limited to 60 requests per minute per IP.",
+                "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Supports difficulty query param (easy/hard). Rate limited to 60 requests per minute per IP.",
                 "produces": [
                     "application/json"
                 ],
@@ -218,6 +276,18 @@ const docTemplate = `{
                     "challenge"
                 ],
                 "summary": "Start a new Challenge Mode session",
+                "parameters": [
+                    {
+                        "enum": [
+                            "easy",
+                            "hard"
+                        ],
+                        "type": "string",
+                        "description": "Difficulty mode (easy for Lookers, hard for Bonhams)",
+                        "name": "difficulty",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0",
@@ -415,7 +485,7 @@ const docTemplate = `{
         },
         "/api/data-source": {
             "get": {
-                "description": "Returns information about the data source (Bonhams Car Auctions) including total listings count",
+                "description": "Returns information about both data sources (Bonhams and Lookers) including listing counts",
                 "produces": [
                     "application/json"
                 ],
@@ -425,7 +495,7 @@ const docTemplate = `{
                 "summary": "Get current data source information",
                 "responses": {
                     "200": {
-                        "description": "data_source: bonhams_auctions, total_listings: count, description: Real Bonhams Car Auction results",
+                        "description": "data sources info with Easy/Hard mode listings",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -436,7 +506,7 @@ const docTemplate = `{
         },
         "/api/leaderboard": {
             "get": {
-                "description": "Returns the leaderboard optionally filtered by game mode",
+                "description": "Returns the leaderboard optionally filtered by game mode and difficulty, sorted by score (descending for challenge, ascending for streak)",
                 "produces": [
                     "application/json"
                 ],
@@ -447,8 +517,20 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Game mode filter (zero or streak)",
+                        "description": "Game mode filter (streak or challenge)",
                         "name": "mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Difficulty filter (easy or hard)",
+                        "name": "difficulty",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of entries to return (default: 10)",
+                        "name": "limit",
                         "in": "query"
                     }
                 ],
@@ -465,16 +547,81 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/random-enhanced-listing": {
-            "get": {
-                "description": "Returns a random car listing with full auction details and characteristics, price hidden for guessing",
+        "/api/leaderboard/submit": {
+            "post": {
+                "description": "Submit a score to the leaderboard for streak or challenge mode. Validates the score against the session data.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "game"
                 ],
-                "summary": "Get a random car listing with all Bonhams characteristics",
+                "summary": "Submit a score to the leaderboard",
+                "parameters": [
+                    {
+                        "description": "Score submission data",
+                        "name": "submission",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LeaderboardSubmissionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success message and leaderboard position",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "error: Invalid request or score validation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "error: Too Many Requests - Rate limited",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/random-enhanced-listing": {
+            "get": {
+                "description": "Returns a random car listing with full details, supports difficulty query param (easy/hard)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "game"
+                ],
+                "summary": "Get a random car listing with all characteristics based on difficulty",
+                "parameters": [
+                    {
+                        "enum": [
+                            "easy",
+                            "hard"
+                        ],
+                        "type": "string",
+                        "description": "Difficulty mode (easy for Lookers, hard for Bonhams)",
+                        "name": "difficulty",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -757,6 +904,14 @@ const docTemplate = `{
                 "listingId"
             ],
             "properties": {
+                "difficulty": {
+                    "description": "Default to hard for backward compatibility",
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "hard"
+                    ]
+                },
                 "gameMode": {
                     "type": "string",
                     "enum": [
@@ -808,18 +963,67 @@ const docTemplate = `{
         },
         "models.LeaderboardEntry": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
                 "date": {
+                    "type": "string"
+                },
+                "difficulty": {
+                    "description": "\"easy\" or \"hard\", defaults to \"hard\" for backward compatibility",
                     "type": "string"
                 },
                 "gameMode": {
                     "type": "string"
                 },
-                "name": {
+                "id": {
                     "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
                 },
                 "score": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.LeaderboardSubmissionRequest": {
+            "type": "object",
+            "required": [
+                "gameMode",
+                "name",
+                "score"
+            ],
+            "properties": {
+                "difficulty": {
+                    "description": "Default to hard for backward compatibility",
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "hard"
+                    ]
+                },
+                "gameMode": {
+                    "type": "string",
+                    "enum": [
+                        "streak",
+                        "challenge"
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
+                },
+                "score": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "sessionId": {
+                    "type": "string"
                 }
             }
         }
@@ -840,7 +1044,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
-	Title:            "Motors Price Guesser API",
+	Title:            "CarGuessr API",
 	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

@@ -41,6 +41,11 @@ func (s *BonhamsScraper) Enable() {
 	s.enabled = true
 }
 
+// Close closes the browser connection
+func (s *BonhamsScraper) Close() {
+	s.closeBrowser()
+}
+
 // ScrapeCarListings scrapes car listings from Bonhams auction results
 func (s *BonhamsScraper) ScrapeCarListings(maxListings int) ([]*models.BonhamsCar, error) {
 	if !s.enabled {
