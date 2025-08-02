@@ -393,6 +393,59 @@ header h1 {
     font-weight: 600;
 }
 
+.endless-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    margin-bottom: 10px;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.difficult-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #f85032 0%, #e73827 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(248, 80, 50, 0.3);
+    margin-bottom: 10px;
+}
+
+.recommended-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(58, 123, 213, 0.3);
+    margin-bottom: 10px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+
 .mode-card p {
     margin-bottom: 10px;
     line-height: 1.6;
