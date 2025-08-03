@@ -19,7 +19,12 @@ let leaderboardState = {
 
 // Generate a session ID for tracking scores
 function generateSessionId() {
-    return Math.random().toString(36).substr(2, 9);
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 16; i++) {
+        result += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    return result;
 }
 
 // LocalStorage functions for difficulty preference
@@ -578,11 +583,27 @@ function nextRound() {
     unlockBodyScroll();
     
     if (currentGame.mode === 'challenge') {
-        if (currentGame.challengeSession.currentCar >= currentGame.challengeSession.cars.length) {
+        // Check if challenge is complete (10 cars)
+        const currentCarNum = currentGame.challengeSession ? currentGame.challengeSession.currentCar : 0;
+        const totalGuesses = currentGame.challengeGuesses ? currentGame.challengeGuesses.length : 0;
+        
+        console.log('Next round analysis:', {
+            currentCarNum,
+            totalGuesses,
+            sessionComplete: currentGame.challengeSession ? currentGame.challengeSession.isComplete : 'unknown',
+            sessionData: currentGame.challengeSession
+        });
+        
+        // Only consider complete if backend explicitly says so
+        const isComplete = (currentGame.challengeSession && currentGame.challengeSession.isComplete === true);
+        
+        if (isComplete) {
             // Challenge complete - show final results
+            console.log('Challenge complete! Showing results...');
             displayChallengeResults();
         } else {
             // Load next challenge car
+            console.log('Loading next challenge car...');
             loadChallengeAuto();
             updateChallengeProgress();
             // Auto-scroll to car image after loading next car
@@ -641,6 +662,7 @@ async function startChallengeMode() {
         
         const challengeSession = await response.json();
         currentGame.challengeSession = challengeSession;
+        currentGame.sessionId = challengeSession.sessionId; // Use backend session ID
         currentGame.challengeGuesses = [];
         
         // Load first car
@@ -652,6 +674,42 @@ async function startChallengeMode() {
     } catch (error) {
         console.error('Error starting challenge:', error);
         alert('Failed to start challenge mode. Please try again.');
+        location.reload();
+    }
+}
+
+// Initialize challenge with existing session (for friend challenges)
+async function initializeChallenge(sessionId) {
+    try {
+        const response = await fetch(`/api/challenge/${sessionId}`);
+        
+        if (!response.ok) throw new Error('Failed to load challenge session');
+        
+        const challengeSession = await response.json();
+        
+        // Set up complete game state - IMPORTANT: Use the session ID from the backend
+        currentGame.mode = 'challenge';
+        currentGame.difficulty = challengeSession.difficulty;
+        currentGame.score = challengeSession.totalScore || 0;
+        currentGame.sessionId = challengeSession.sessionId; // Use backend session ID
+        currentGame.challengeSession = challengeSession;
+        currentGame.challengeGuesses = challengeSession.guesses || [];
+        
+        // Update UI elements
+        document.getElementById('scoreDisplay').style.display = 'inline-block';
+        const scoreLabel = document.getElementById('scoreLabel');
+        scoreLabel.textContent = 'Challenge Score: ';
+        document.getElementById('scoreValue').textContent = currentGame.score;
+        
+        // Load current car
+        loadChallengeAuto();
+        
+        // Add challenge progress display
+        addChallengeProgress();
+        
+    } catch (error) {
+        console.error('Error initializing challenge:', error);
+        alert('Failed to load challenge. Please try again.');
         location.reload();
     }
 }
@@ -695,9 +753,43 @@ function updateChallengeProgress() {
     }
 }
 
-function loadChallengeAuto() {
-    const session = currentGame.challengeSession;
+async function loadChallengeAuto() {
+    let session = currentGame.challengeSession;
+    
+    // If session is missing or incomplete, fetch it from backend
+    if (!session || !session.cars || session.cars.length === 0) {
+        console.log('Challenge session missing or incomplete, fetching from backend...');
+        
+        let sessionId = currentGame.sessionId;
+        if (!sessionId && session) {
+            sessionId = session.sessionId;
+        }
+        
+        if (!sessionId) {
+            console.error('No session ID available to fetch challenge data');
+            alert('Challenge session error. Please refresh and try again.');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/challenge/${sessionId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch challenge session');
+            }
+            
+            const fetchedSession = await response.json();
+            currentGame.challengeSession = fetchedSession;
+            session = fetchedSession;
+            console.log('Fetched challenge session:', session);
+        } catch (error) {
+            console.error('Error fetching challenge session:', error);
+            alert('Failed to load challenge data. Please refresh and try again.');
+            return;
+        }
+    }
+    
     if (session.currentCar >= session.cars.length) {
+        console.log('All cars completed');
         return;
     }
     
@@ -724,7 +816,30 @@ async function submitChallengeGuess(guessValue) {
     submitButton.disabled = true;
     
     try {
-        const response = await fetch(`/api/challenge/${currentGame.challengeSession.sessionId}/guess`, {
+        // Initialize currentGame.challengeSession at the very beginning if needed
+        if (!currentGame.challengeSession) {
+            currentGame.challengeSession = {
+                sessionId: null,
+                currentCar: 0,
+                totalScore: 0,
+                guesses: []
+            };
+        }
+        
+        // Get session ID with fallback logic
+        let sessionId = currentGame.sessionId;
+        if (!sessionId && currentGame.challengeSession) {
+            sessionId = currentGame.challengeSession.sessionId;
+        }
+        
+        if (!sessionId) {
+            console.error('No session ID available for challenge guess');
+            throw new Error('Session not properly initialized');
+        }
+        
+        console.log('Submitting challenge guess with session ID:', sessionId);
+        
+        const response = await fetch(`/api/challenge/${sessionId}/guess`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -734,15 +849,67 @@ async function submitChallengeGuess(guessValue) {
             })
         });
         
-        if (!response.ok) throw new Error('Failed to submit challenge guess');
+        console.log('Challenge guess response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Challenge guess failed:', errorText);
+            throw new Error(`Server error: ${response.status}`);
+        }
         
         const result = await response.json();
+        console.log('Challenge guess result:', result);
+        console.log('currentGame.challengeSession before initialization:', currentGame.challengeSession);
+        
+        // Initialize challenge session BEFORE accessing it
+        if (!currentGame.challengeSession) {
+            currentGame.challengeSession = {
+                sessionId: sessionId,
+                currentCar: 0,
+                totalScore: 0,
+                guesses: [],
+                isComplete: false
+            };
+        }
+        
+        // Ensure all required properties exist
+        if (!currentGame.challengeSession.guesses) {
+            currentGame.challengeSession.guesses = [];
+        }
+        if (typeof currentGame.challengeSession.currentCar !== 'number') {
+            currentGame.challengeSession.currentCar = 0;
+        }
+        if (typeof currentGame.challengeSession.totalScore !== 'number') {
+            currentGame.challengeSession.totalScore = 0;
+        }
+        
+        // Initialize challengeGuesses array if it doesn't exist
+        if (!currentGame.challengeGuesses) {
+            currentGame.challengeGuesses = [];
+        }
+        
         currentGame.challengeGuesses.push(result);
         
-        // Update challenge session
+        // Update challenge session safely
         currentGame.challengeSession.currentCar++;
         currentGame.challengeSession.totalScore = result.totalScore;
         currentGame.challengeSession.guesses.push(result);
+        
+        // CRITICAL: Update completion status ONLY when backend confirms completion
+        if (result.sessionComplete === true) {
+            currentGame.challengeSession.isComplete = true;
+        }
+        if (result.isLastCar === true) {
+            currentGame.challengeSession.isComplete = true;
+        }
+        
+        console.log('Updated challenge session:', {
+            currentCar: currentGame.challengeSession.currentCar,
+            totalScore: currentGame.challengeSession.totalScore,
+            isComplete: currentGame.challengeSession.isComplete,
+            sessionComplete: result.sessionComplete,
+            isLastCar: result.isLastCar
+        });
         
         // Update score display
         document.getElementById('scoreValue').textContent = result.totalScore;
@@ -751,7 +918,8 @@ async function submitChallengeGuess(guessValue) {
         displayChallengeResult(result);
         
     } catch (error) {
-        alert('Failed to submit guess. Please try again.');
+        console.error('Challenge guess submission error:', error);
+        alert(`Failed to submit guess: ${error.message}`);
     } finally {
         submitButton.innerHTML = 'Submit Guess';
         submitButton.disabled = false;
@@ -760,7 +928,8 @@ async function submitChallengeGuess(guessValue) {
 
 function displayChallengeResult(result) {
     // Update result modal content for challenge mode
-    document.getElementById('resultTitle').textContent = `Car ${currentGame.challengeSession.currentCar}/10 Complete!`;
+    const currentCar = currentGame.challengeSession ? currentGame.challengeSession.currentCar : result.nextCarNumber || 1;
+    document.getElementById('resultTitle').textContent = `Car ${currentCar}/10 Complete!`;
     document.getElementById('actualPrice').textContent = '£' + result.actualPrice.toLocaleString();
     document.getElementById('yourGuess').textContent = '£' + result.guessedPrice.toLocaleString();
     document.getElementById('priceDifference').textContent = '£' + result.difference.toLocaleString();
@@ -787,36 +956,73 @@ function displayChallengeResult(result) {
     
     // Show modal with modified buttons
     const nextButton = document.querySelector('.next-button');
-    nextButton.textContent = (result.isLastCar || result.sessionComplete) ? 'View Results' : 'Next Car';
     
+    // Only use backend-provided completion flags
+    const isLastCar = result.isLastCar === true || result.sessionComplete === true;
+                     
+    nextButton.textContent = isLastCar ? 'View Results' : 'Next Car';
+    
+    console.log('Challenge result analysis:', {
+        isLastCar: result.isLastCar,
+        sessionComplete: result.sessionComplete,
+        currentCar: currentGame.challengeSession ? currentGame.challengeSession.currentCar : 'unknown',
+        nextCarNumber: result.nextCarNumber,
+        finalDecision: isLastCar
+    });
+    
+    lockBodyScroll();
     document.getElementById('resultModal').style.display = 'flex';
 }
 
 function displayChallengeResults() {
     const session = currentGame.challengeSession;
     
+    if (!session) {
+        console.error('No challenge session available for results display');
+        alert('Error: Challenge session not found. Please try again.');
+        location.reload();
+        return;
+    }
+    
+    console.log('Displaying challenge results for session:', session);
+    
     // Set final score
-    document.getElementById('challengeFinalScore').textContent = `Final Score: ${session.totalScore.toLocaleString()} points`;
+    const finalScore = session.totalScore || 0;
+    document.getElementById('challengeFinalScore').textContent = `Final Score: ${finalScore.toLocaleString()} points`;
     
     // Build results breakdown
     const resultsDiv = document.getElementById('challengeResults');
     resultsDiv.innerHTML = '';
     
-    session.guesses.forEach((guess, index) => {
-        const car = session.cars[index];
-        const resultItem = document.createElement('div');
-        resultItem.className = 'challenge-result-item';
-        
-        const accuracy = (100 - guess.percentage).toFixed(1);
-        
-        resultItem.innerHTML = `
-            <div class="challenge-result-car">${car.year} ${car.make} ${car.model}</div>
-            <div class="challenge-result-accuracy">${accuracy}% accurate</div>
-            <div class="challenge-result-points">${guess.points} pts</div>
-        `;
-        
-        resultsDiv.appendChild(resultItem);
-    });
+    const guesses = session.guesses || currentGame.challengeGuesses || [];
+    const cars = session.cars || [];
+    
+    console.log('Results breakdown:', { guessesCount: guesses.length, carsCount: cars.length });
+    
+    if (guesses.length === 0) {
+        resultsDiv.innerHTML = '<div class="no-results">No guesses recorded</div>';
+    } else {
+        guesses.forEach((guess, index) => {
+            const car = cars[index];
+            if (!car) {
+                console.warn(`No car data for guess ${index + 1}`);
+                return;
+            }
+            
+            const resultItem = document.createElement('div');
+            resultItem.className = 'challenge-result-item';
+            
+            const accuracy = (100 - guess.percentage).toFixed(1);
+            
+            resultItem.innerHTML = `
+                <div class="challenge-result-car">${car.year || ''} ${car.make || ''} ${car.model || 'Unknown Car'}</div>
+                <div class="challenge-result-accuracy">${accuracy}% accurate</div>
+                <div class="challenge-result-points">${guess.points || 0} pts</div>
+            `;
+            
+            resultsDiv.appendChild(resultItem);
+        });
+    }
     
     // Hide submit button if score is 0
     const submitButton = document.querySelector('#challengeCompleteModal .submit-score-button');
@@ -898,6 +1104,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Show name input modal for leaderboard submission
 function showNameInputModal(gameMode) {
+    // Check if user is logged in via auth.js
+    const currentUser = window.authFunctions && window.authFunctions.currentUser();
+    
     // Store the leaderboard data
     let score = 0;
     let sessionId = null;
@@ -918,6 +1127,14 @@ function showNameInputModal(gameMode) {
         sessionId: sessionId
     };
     
+    // If user is logged in, auto-submit to leaderboard with their display name
+    if (currentUser) {
+        const playerName = currentUser.displayName || currentUser.username;
+        console.log('Auto-submitting leaderboard for logged-in user:', playerName);
+        autoSubmitForLoggedInUser(playerName);
+        return;
+    }
+    
     // Hide current modal
     document.getElementById('challengeCompleteModal').style.display = 'none';
     document.getElementById('gameOverModal').style.display = 'none';
@@ -929,6 +1146,66 @@ function showNameInputModal(gameMode) {
     setTimeout(() => {
         document.getElementById('playerName').focus();
     }, 100);
+}
+
+// Auto-submit leaderboard for logged-in users
+async function autoSubmitForLoggedInUser(playerName) {
+    if (!currentGame.pendingLeaderboardData) {
+        console.error('No score data available for auto-submission');
+        return;
+    }
+    
+    try {
+        const submissionData = {
+            name: playerName,
+            score: parseInt(currentGame.pendingLeaderboardData.score) || 0,
+            gameMode: currentGame.pendingLeaderboardData.gameMode,
+            difficulty: currentGame.difficulty || 'hard',
+            sessionId: currentGame.pendingLeaderboardData.sessionId || ''
+        };
+        
+        const response = await fetch('/api/leaderboard/submit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(submissionData)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to submit score');
+        }
+        
+        const result = await response.json();
+        console.log('Score submitted successfully for logged-in user:', result);
+        
+        // Hide current modals
+        document.getElementById('challengeCompleteModal').style.display = 'none';
+        document.getElementById('gameOverModal').style.display = 'none';
+        
+        // Mark that we're showing leaderboard after submission so it redirects on close
+        currentGame.leaderboardShownAfterSubmission = true;
+        console.log('Setting leaderboardShownAfterSubmission to true for auto-submit');
+        
+        // Show leaderboard with the appropriate game mode
+        const gameMode = currentGame.pendingLeaderboardData.gameMode;
+        console.log('Showing leaderboard with game mode:', gameMode);
+        showLeaderboard(gameMode);
+        
+    } catch (error) {
+        console.error('Failed to auto-submit score:', error);
+        // Fallback to manual submission
+        document.getElementById('challengeCompleteModal').style.display = 'none';
+        document.getElementById('gameOverModal').style.display = 'none';
+        document.getElementById('nameInputModal').style.display = 'flex';
+        
+        // Pre-populate the name field
+        document.getElementById('playerName').value = playerName;
+        setTimeout(() => {
+            document.getElementById('playerName').focus();
+        }, 100);
+    }
 }
 
 // Show name input modal from game over (streak mode)
@@ -1038,7 +1315,9 @@ function closeLeaderboard() {
     unlockBodyScroll();
     
     // If leaderboard was shown after score submission, reload page to go back to homepage
+    console.log('Closing leaderboard, leaderboardShownAfterSubmission:', currentGame.leaderboardShownAfterSubmission);
     if (currentGame.leaderboardShownAfterSubmission) {
+        console.log('Reloading page to go back to homepage');
         location.reload();
     }
 }
