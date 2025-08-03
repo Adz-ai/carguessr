@@ -320,13 +320,13 @@ func main() {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	testUsername := fmt.Sprintf("schematest_%d", len(columns)) // Unique based on column count
+	testUsername := fmt.Sprintf("schematest_%d", len(existingTables)) // Unique based on table count
 	testData := []interface{}{
 		testUsername,
 		"testhash",
-		fmt.Sprintf("Schema Test %d", len(columns)),
+		fmt.Sprintf("Schema Test %d", len(existingTables)),
 		false,
-		fmt.Sprintf("testsession_%d", len(columns)),
+		fmt.Sprintf("testsession_%d", len(existingTables)),
 		"",
 		"Test question?",
 		"testhash",
