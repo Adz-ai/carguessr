@@ -31,12 +31,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -73,9 +73,16 @@ func main() {
 		"192.168.0.0/16", // Private networks
 	})
 
-	// Configure CORS
+	// Configure CORS with specific allowed origins for security
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"}
+	// Allow specific origins instead of wildcard for security
+	allowedOrigins := []string{
+		"http://localhost:8080",    // Development
+		"http://127.0.0.1:8080",    // Development
+		"https://carguessr.uk",     // Production domain
+		"https://www.carguessr.uk", // Production www subdomain
+	}
+	config.AllowOrigins = allowedOrigins
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "X-Session-ID"}
 	config.ExposeHeaders = []string{"Content-Length", "X-Session-ID"}
@@ -115,8 +122,10 @@ func main() {
 	adminKey := os.Getenv("ADMIN_KEY")
 	if adminKey == "" {
 		adminKey = "change-this-in-production-" + strings.ToUpper(strings.ReplaceAll(generateSessionID(), "-", ""))
-		log.Printf("⚠️  No ADMIN_KEY set in environment. Generated temporary key: %s", adminKey)
+		log.Println("⚠️  No ADMIN_KEY set in environment. Generated temporary key (check console)")
 		log.Println("⚠️  Please set ADMIN_KEY environment variable for production use!")
+		// Only display to console, not in logs to prevent credential exposure
+		fmt.Printf("TEMP ADMIN KEY: %s\n", adminKey)
 	}
 
 	// Serve static files with no-cache headers to prevent Cloudflare caching issues
@@ -166,6 +175,8 @@ func main() {
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/auth/logout", authHandler.Logout)
+		api.POST("/auth/reset-password", authHandler.ResetPassword)
+		api.POST("/auth/security-question", authHandler.GetSecurityQuestion)
 		api.GET("/auth/profile", authHandler.RequireAuth(), authHandler.GetProfile)
 		api.PUT("/auth/profile", authHandler.RequireAuth(), authHandler.UpdateProfile)
 
@@ -222,7 +233,6 @@ func main() {
 
 // generateSessionID creates a random session ID
 func generateSessionID() string {
-	rand.Seed(time.Now().UnixNano())
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 16)
 	for i := range b {

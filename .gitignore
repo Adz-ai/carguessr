@@ -44,4 +44,27 @@ vendor/
 # Compiled templates
 *.qtpl.go
 
+# Test and debug JSON files
+*.json
+test_*.json
+*_response.json
+challenge*.json
+creator*.json
+participant*.json
+fresh_*.json
+join_*.json
+guest_*.json
+hard_*.json
+
+# Development authentication files
+cookies.txt
+token.txt
+
+# Backup directories
+backup_*/
+
+# Executables at root level
+/main
+/server
+
 # Note: Cache files (bonhams_cache.json, lookers_cache.json) are now tracked in git under data/ folder

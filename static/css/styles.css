@@ -1796,6 +1796,172 @@ header h1 {
     box-shadow: 0 8px 20px rgba(77, 208, 255, 0.3);
 }
 
+.auth-submit-btn.secondary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.auth-submit-btn.secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.security-question-text {
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-style: italic;
+    color: #555;
+    margin: 8px 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* Challenge Guide Modal Styling */
+.guide-modal {
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, rgba(20, 20, 35, 0.95) 0%, rgba(30, 30, 50, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.guide-modal h2 {
+    color: #4dd0ff;
+    margin-bottom: 20px;
+    font-size: 24px;
+    text-align: center;
+}
+
+.guide-content {
+    padding: 0;
+}
+
+.guide-section {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.guide-section:last-child {
+    border-bottom: none;
+    margin-bottom: 15px;
+}
+
+.guide-section h3 {
+    color: #e0e0e0;
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    text-shadow: 0 2px 10px rgba(32, 178, 170, 0.3);
+}
+
+.guide-section p {
+    color: #b0b0b0;
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.guide-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(102, 126, 234, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid #667eea;
+}
+
+.step-number {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.step-content strong {
+    color: #e0e0e0;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.step-content p {
+    color: #b0b0b0;
+    margin: 0;
+    font-size: 14px;
+}
+
+.guide-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.guide-list li {
+    padding: 8px 0;
+    color: #b0b0b0;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.guide-list li:last-child {
+    border-bottom: none;
+}
+
+.guide-list li strong {
+    color: #e0e0e0;
+}
+
+.guide-cta {
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(32, 178, 170, 0.2) 0%, rgba(77, 208, 255, 0.2) 100%);
+    border-radius: 12px;
+    margin-top: 20px;
+    border: 1px solid rgba(77, 208, 255, 0.3);
+}
+
+.guide-cta p {
+    margin-bottom: 15px;
+    font-size: 16px;
+    color: #e0e0e0;
+}
+
+.cta-button {
+    background: linear-gradient(135deg, #4dd0ff 0%, #3ba0cc 100%);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cta-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(77, 208, 255, 0.3);
+}
+
+.challenge-action-btn.guide-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.challenge-action-btn.guide-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
 .auth-divider {
     text-align: center;
     color: #666;
@@ -2375,5 +2541,135 @@ header h1 {
     .tab-button {
         font-size: 14px;
         padding: 10px 15px;
+    }
+}
+
+/* Signup Promotion Section Styles */
+.signup-promotion-section {
+    margin-top: 30px;
+    padding: 20px 0;
+}
+
+.signup-promotion-box {
+    background: linear-gradient(135deg, rgba(32, 178, 170, 0.15) 0%, rgba(77, 208, 255, 0.15) 100%);
+    border: 2px solid rgba(77, 208, 255, 0.3);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    margin-top: 15px;
+    animation: promotionGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes promotionGlow {
+    0% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 20px rgba(77, 208, 255, 0.1);
+    }
+    100% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 30px rgba(77, 208, 255, 0.2);
+    }
+}
+
+.promotion-content h3 {
+    color: #4dd0ff;
+    font-size: 24px;
+    margin-bottom: 15px;
+    text-shadow: 0 2px 10px rgba(77, 208, 255, 0.3);
+}
+
+.promotion-content p {
+    color: #e0e0e0;
+    font-size: 16px;
+    margin-bottom: 20px;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+    text-align: left;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.feature-list li {
+    color: #b0b0b0;
+    padding: 8px 0;
+    font-size: 15px;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-list li:last-child {
+    border-bottom: none;
+}
+
+.feature-list li strong {
+    color: #e0e0e0;
+}
+
+.promotion-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 25px;
+    align-items: center;
+}
+
+.secondary-button {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    color: #4dd0ff;
+    border: 1px solid rgba(77, 208, 255, 0.3);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.secondary-button:hover {
+    background: linear-gradient(135deg, rgba(77, 208, 255, 0.1) 0%, rgba(77, 208, 255, 0.05) 100%);
+    border-color: rgba(77, 208, 255, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(77, 208, 255, 0.2);
+}
+
+.challenge-divider span {
+    background: linear-gradient(135deg, #4dd0ff 0%, #20b2aa 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+/* Mobile responsiveness for promotion section */
+@media (max-width: 768px) {
+    .signup-promotion-box {
+        padding: 20px 15px;
+        margin: 10px;
+    }
+    
+    .promotion-content h3 {
+        font-size: 20px;
+    }
+    
+    .feature-list li {
+        font-size: 14px;
+    }
+    
+    .promotion-actions {
+        gap: 12px;
+    }
+    
+    .cta-button, .secondary-button {
+        width: 100%;
+        max-width: 280px;
     }
 }

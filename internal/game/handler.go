@@ -22,12 +22,13 @@ import (
 	"autotraderguesser/internal/leaderboard"
 	"autotraderguesser/internal/models"
 	"autotraderguesser/internal/scraper"
+	"autotraderguesser/internal/validation"
 )
 
 const ListingAmount int = 250
 
 type Handler struct {
-	db                   *database.Database                  // Database connection
+	db                   *database.Database // Database connection
 	scraper              *scraper.Scraper
 	bonhamsListings      map[string]*models.BonhamsCar // Hard mode data
 	lookersListings      map[string]*models.LookersCar // Easy mode data
@@ -93,6 +94,9 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 	sessionID := c.GetHeader("X-Session-ID")
 	if sessionID == "" {
 		sessionID = generateSessionID()
+	} else if err := validation.ValidateSessionID(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+		return
 	}
 
 	h.mu.Lock() // Using Lock instead of RLock because we modify recentlyShown
@@ -138,6 +142,9 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 	sessionID := c.GetHeader("X-Session-ID")
 	if sessionID == "" {
 		sessionID = generateSessionID() // Generate one if not provided
+	} else if err := validation.ValidateSessionID(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+		return
 	}
 
 	h.mu.Lock() // Using Lock instead of RLock because we modify recentlyShown
@@ -290,6 +297,9 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 	sessionID := c.GetHeader("X-Session-ID")
 	if sessionID == "" {
 		sessionID = generateSessionID()
+	} else if err := validation.ValidateSessionID(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+		return
 	}
 
 	h.mu.Lock()
@@ -353,7 +363,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 		// Fallback to in-memory leaderboard
 		h.mu.RLock()
 		defer h.mu.RUnlock()
-		
+
 		filtered := make([]models.LeaderboardEntry, 0)
 		for _, entry := range h.leaderboard {
 			// Filter by game mode
@@ -470,10 +480,18 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 		return
 	}
 
+	// Update user's favorite difficulty based on gameplay patterns (for logged-in users)
+	if userID != nil {
+		if err := h.db.UpdateUserFavoriteDifficulty(*userID); err != nil {
+			log.Printf("Failed to update user's favorite difficulty: %v", err)
+			// Don't fail the request for this non-critical operation
+		}
+	}
+
 	// Also add to legacy in-memory leaderboard for backward compatibility during transition
 	entry.Date = time.Now().Format("2006-01-02 15:04:05")
 	h.leaderboard = append(h.leaderboard, entry)
-	
+
 	// Sort legacy leaderboard
 	sort.Slice(h.leaderboard, func(i, j int) bool {
 		if h.leaderboard[i].GameMode != h.leaderboard[j].GameMode {
@@ -1389,25 +1407,25 @@ func (h *Handler) calculateChallengePoints(percentage float64) int {
 func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*models.ChallengeSession, error) {
 	h.mu.RLock()
 	var selectedCars []*models.EnhancedCar
-	
+
 	if difficulty == "easy" {
 		// Easy mode - use Lookers listings
 		if len(h.lookersListings) < 10 {
 			h.mu.RUnlock()
 			return nil, fmt.Errorf("not enough easy mode cars available")
 		}
-		
+
 		var allCars []*models.LookersCar
 		for _, car := range h.lookersListings {
 			allCars = append(allCars, car)
 		}
 		h.mu.RUnlock()
-		
+
 		// Shuffle and select 10
 		rand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
-		
+
 		selectedCars = make([]*models.EnhancedCar, 10)
 		for i := 0; i < 10; i++ {
 			enhancedCar := allCars[i].ToEnhancedCar()
@@ -1415,23 +1433,23 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 			selectedCars[i] = enhancedCar
 		}
 	} else {
-		// Hard mode - use Bonhams listings  
+		// Hard mode - use Bonhams listings
 		if len(h.bonhamsListings) < 10 {
 			h.mu.RUnlock()
 			return nil, fmt.Errorf("not enough hard mode cars available")
 		}
-		
+
 		var allCars []*models.BonhamsCar
 		for _, car := range h.bonhamsListings {
 			allCars = append(allCars, car)
 		}
 		h.mu.RUnlock()
-		
+
 		// Shuffle and select 10
 		rand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
-		
+
 		selectedCars = make([]*models.EnhancedCar, 10)
 		for i := 0; i < 10; i++ {
 			enhancedCar := allCars[i].ToEnhancedCar()
@@ -1439,9 +1457,9 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 			selectedCars[i] = enhancedCar
 		}
 	}
-	
+
 	sessionID := generateSessionID()
-	
+
 	session := &models.ChallengeSession{
 		SessionID:  sessionID,
 		UserID:     userID,
@@ -1453,17 +1471,16 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 		IsComplete: false,
 		StartTime:  time.Now().Format(time.RFC3339),
 	}
-	
+
 	// Save the template session to database
 	if err := h.db.CreateChallengeSession(session); err != nil {
 		return nil, fmt.Errorf("failed to create template session: %w", err)
 	}
-	
+
 	return session, nil
 }
 
 func generateSessionID() string {
-	rand.Seed(time.Now().UnixNano())
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 16)
 	for i := range b {
@@ -1604,14 +1621,14 @@ func (h *Handler) findLeaderboardPositionFromDB(entry models.LeaderboardEntry) i
 		log.Printf("Failed to get leaderboard for position calculation: %v", err)
 		return -1
 	}
-	
+
 	// Find position of the entry (entries are already sorted by score in descending order)
 	for i, e := range allEntries {
 		if e.Score <= entry.Score {
 			return i + 1
 		}
 	}
-	
+
 	// If entry score is lower than all existing entries
 	return len(allEntries) + 1
 }

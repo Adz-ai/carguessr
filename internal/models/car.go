@@ -313,16 +313,16 @@ type ChallengeResponse struct {
 
 // LeaderboardEntry represents a high score entry
 type LeaderboardEntry struct {
-	ID                  int    `json:"id,omitempty" db:"id"`
-	UserID              *int   `json:"userId,omitempty" db:"user_id"`
-	Name                string `json:"name" binding:"required,min=1,max=20" db:"username"`
-	Score               int    `json:"score" db:"score"`
-	GameMode            string `json:"gameMode" db:"game_mode"`
-	Difficulty          string `json:"difficulty,omitempty" db:"difficulty"` // "easy" or "hard", defaults to "hard" for backward compatibility
-	Date                string `json:"date" db:"-"` // Formatted date for JSON response
-	SessionID           string `json:"sessionId,omitempty" db:"session_id"`
-	FriendChallengeID   *int   `json:"friendChallengeId,omitempty" db:"friend_challenge_id"`
-	LegacyID            string `json:"legacyId,omitempty" db:"legacy_id"` // For migration from JSON
+	ID                int    `json:"id,omitempty" db:"id"`
+	UserID            *int   `json:"userId,omitempty" db:"user_id"`
+	Name              string `json:"name" binding:"required,min=1,max=20" db:"username"`
+	Score             int    `json:"score" db:"score"`
+	GameMode          string `json:"gameMode" db:"game_mode"`
+	Difficulty        string `json:"difficulty,omitempty" db:"difficulty"` // "easy" or "hard", defaults to "hard" for backward compatibility
+	Date              string `json:"date" db:"-"`                          // Formatted date for JSON response
+	SessionID         string `json:"sessionId,omitempty" db:"session_id"`
+	FriendChallengeID *int   `json:"friendChallengeId,omitempty" db:"friend_challenge_id"`
+	LegacyID          string `json:"legacyId,omitempty" db:"legacy_id"` // For migration from JSON
 }
 
 // LeaderboardSubmissionRequest represents a request to submit a score to the leaderboard

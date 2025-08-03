@@ -168,7 +168,34 @@
                 </div>
             </div>
             
-            <!-- Friend Challenge Section -->
+            <!-- Signup Promotion Section (for unauthenticated users) -->
+            <div class="signup-promotion-section" id="signupPromotionSection" style="display: none;">
+                <div class="challenge-divider">
+                    <span>UNLOCK MULTIPLAYER</span>
+                </div>
+                <div class="signup-promotion-box">
+                    <div class="promotion-content">
+                        <h3>🎯 Challenge Your Friends!</h3>
+                        <p>Create your free account to unlock:</p>
+                        <ul class="feature-list">
+                            <li>🏆 <strong>Friend Challenges</strong> - Compete on identical car sets</li>
+                            <li>📊 <strong>Personal Leaderboards</strong> - Track your rankings</li>
+                            <li>📈 <strong>Game Statistics</strong> - View your progress and achievements</li>
+                            <li>👥 <strong>Challenge Management</strong> - Create and join unlimited challenges</li>
+                        </ul>
+                        <div class="promotion-actions">
+                            <button class="cta-button" onclick="showRegisterModal()">
+                                Create Free Account
+                            </button>
+                            <button class="secondary-button" onclick="showLoginModal()">
+                                Already have an account?
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friend Challenge Section (for authenticated users) -->
             <div class="friend-challenge-section" id="friendChallengeSection" style="display: none;">
                 <div class="challenge-divider">
                     <span>OR</span>
@@ -189,6 +216,14 @@
                             <line x1="23" y1="11" x2="17" y2="11"></line>
                         </svg>
                         Join with Code
+                    </button>
+                    <button class="challenge-action-btn guide-btn" onclick="showChallengeGuide()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        How It Works
                     </button>
                 </div>
             </div>
@@ -422,7 +457,8 @@
                 <button type="submit" class="auth-submit-btn">Login</button>
             </form>
             <p class="auth-switch">
-                Don't have an account? <a href="#" onclick="switchToRegister(); return false;">Sign up</a>
+                Don't have an account? <a href="#" onclick="switchToRegister(); return false;">Sign up</a><br>
+                <a href="#" onclick="showPasswordReset(); return false;">Forgot Password?</a>
             </p>
         </div>
     </div>
@@ -442,17 +478,62 @@
                     <input type="text" id="registerDisplayName" name="displayName" required minlength="1" maxlength="30">
                 </div>
                 <div class="form-group">
-                    <label for="registerEmail">Email (optional)</label>
-                    <input type="email" id="registerEmail" name="email">
-                </div>
-                <div class="form-group">
                     <label for="registerPassword">Password</label>
                     <input type="password" id="registerPassword" name="password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="registerSecurityQuestion">Security Question</label>
+                    <input type="text" id="registerSecurityQuestion" name="securityQuestion" required minlength="5" maxlength="200" placeholder="e.g., What was your first pet's name?">
+                    <small>This will be used to recover your password if forgotten</small>
+                </div>
+                <div class="form-group">
+                    <label for="registerSecurityAnswer">Security Answer</label>
+                    <input type="text" id="registerSecurityAnswer" name="securityAnswer" required minlength="2" maxlength="100" placeholder="Your answer to the security question">
+                    <small>Case insensitive - remember this answer exactly</small>
                 </div>
                 <button type="submit" class="auth-submit-btn">Create Account</button>
             </form>
             <p class="auth-switch">
                 Already have an account? <a href="#" onclick="switchToLogin(); return false;">Login</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div id="passwordResetModal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal">
+            <button class="modal-close" onclick="closeModal('passwordResetModal')">&times;</button>
+            <h2>Reset Password</h2>
+            <p>To reset your password, please provide your username, display name, and answer to your security question.</p>
+            <form id="passwordResetForm" onsubmit="handlePasswordReset(event)">
+                <div class="form-group">
+                    <label for="resetUsername">Username</label>
+                    <input type="text" id="resetUsername" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="resetDisplayName">Display Name</label>
+                    <input type="text" id="resetDisplayName" name="displayName" required>
+                </div>
+                <div id="securityQuestionSection" style="display: none;">
+                    <div class="form-group">
+                        <label id="securityQuestionLabel">Security Question</label>
+                        <p id="securityQuestionText" class="security-question-text"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="resetSecurityAnswer">Your Answer</label>
+                        <input type="text" id="resetSecurityAnswer" name="securityAnswer" required>
+                        <small>Case insensitive</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="resetNewPassword">New Password</label>
+                        <input type="password" id="resetNewPassword" name="newPassword" required minlength="6">
+                    </div>
+                </div>
+                <button type="button" id="verifyUserBtn" class="auth-submit-btn secondary" onclick="verifyUserForReset()">Verify Identity</button>
+                <button type="submit" id="resetPasswordBtn" style="display: none;" class="auth-submit-btn">Reset Password</button>
+            </form>
+            <p class="auth-switch">
+                Remember your password? <a href="#" onclick="switchToLogin(); return false;">Login</a>
             </p>
         </div>
     </div>
@@ -590,8 +671,128 @@
                     </div>
                     <div class="stat-item">
                         <span class="stat-value" id="favoriteDifficulty">Easy</span>
-                        <span class="stat-label">Favorite Mode</span>
+                        <span class="stat-label">Most Played Difficulty</span>
                     </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengeEasyRegisteredRank">N/A</span>
+                        <span class="stat-label">Challenge Easy (Registered)</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengeEasyOverallRank">N/A</span>
+                        <span class="stat-label">Challenge Easy (Overall)</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengeHardRegisteredRank">N/A</span>
+                        <span class="stat-label">Challenge Hard (Registered)</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengeHardOverallRank">N/A</span>
+                        <span class="stat-label">Challenge Hard (Overall)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Friend Challenge Guide Modal -->
+    <div id="challengeGuideModal" class="modal" style="display: none;">
+        <div class="modal-content guide-modal">
+            <button class="modal-close" onclick="closeModal('challengeGuideModal')">&times;</button>
+            <h2>🎯 Friend Challenge Guide</h2>
+            
+            <div class="guide-content">
+                <div class="guide-section">
+                    <h3>📝 How Friend Challenges Work</h3>
+                    <p>Friend Challenges let you compete directly with friends using the same set of cars! Everyone plays the same challenge with identical cars in the same order, making it a fair competition.</p>
+                    
+                    <div class="guide-steps">
+                        <div class="step">
+                            <span class="step-number">1️⃣</span>
+                            <div class="step-content">
+                                <strong>Creator sets up the challenge</strong>
+                                <p>Choose a title, difficulty (Easy/Hard), and max participants</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">2️⃣</span>
+                            <div class="step-content">
+                                <strong>Share the 6-digit code</strong>
+                                <p>Send the challenge code to friends via text, email, or social media</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">3️⃣</span>
+                            <div class="step-content">
+                                <strong>Friends join using the code</strong>
+                                <p>They click "Join with Code" and enter the 6-digit challenge code</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">4️⃣</span>
+                            <div class="step-content">
+                                <strong>Everyone plays the same cars</strong>
+                                <p>All participants see identical cars in the same order - totally fair!</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">5️⃣</span>
+                            <div class="step-content">
+                                <strong>Compare scores on the leaderboard</strong>
+                                <p>See who got the lowest total error and crowned the winner!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="guide-section">
+                    <h3>🎮 Creating a Challenge</h3>
+                    <ul class="guide-list">
+                        <li><strong>Title:</strong> Give your challenge a fun name (e.g., "Friday Night Face-off")</li>
+                        <li><strong>Difficulty:</strong> 
+                            <br>• <strong>Easy:</strong> Lookers dealership cars (£0-£150k range)
+                            <br>• <strong>Hard:</strong> Bonhams auction cars (£10k-£500k+ range)</li>
+                        <li><strong>Max Participants:</strong> Set how many people can join (2-50 players)</li>
+                        <li><strong>Challenge Code:</strong> You'll get a unique 6-digit code to share</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>👥 Managing Your Challenges</h3>
+                    <p>Use your profile menu to access "My Challenges" where you can:</p>
+                    <ul class="guide-list">
+                        <li><strong>View Created Challenges:</strong> See challenges you've created and their status</li>
+                        <li><strong>View Participating Challenges:</strong> See challenges you've joined</li>
+                        <li><strong>Check Leaderboards:</strong> See how everyone performed</li>
+                        <li><strong>Share Challenge Codes:</strong> Easily copy codes to share with friends</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>🏆 Scoring & Winners</h3>
+                    <ul class="guide-list">
+                        <li><strong>Highest Score Wins:</strong> Whoever gets the highest score after 10 guesses</li>
+                        <li><strong>Same Cars, Fair Play:</strong> Everyone sees identical cars in the same order</li>
+                        <li><strong>Real-time Leaderboard:</strong> See results as people complete the challenge</li>
+                        <li><strong>2-Day Challenge Window:</strong> Challenges expire 48 hours after creation</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>💡 Pro Tips</h3>
+                    <ul class="guide-list">
+                        <li>🔗 <strong>Share the code creatively:</strong> Text, email, social media, or even QR codes!</li>
+                        <li>🎯 <strong>Start with Easy mode</strong> for new players - it's more approachable</li>
+                        <li>🏁 <strong>Set a deadline</strong> by telling friends when you'll check results</li>
+                        <li>🎉 <strong>Create themed challenges:</strong> "Monday Morning Challenge", "Weekend Warriors", etc.</li>
+                        <li>👀 <strong>Watch the leaderboard</strong> for friendly trash-talking opportunities!</li>
+                    </ul>
+                </div>
+
+                <div class="guide-cta">
+                    <p><strong>Ready to challenge your friends?</strong></p>
+                    <button class="cta-button" onclick="closeModal('challengeGuideModal'); showCreateChallengeModal();">
+                        Create Your First Challenge
+                    </button>
                 </div>
             </div>
         </div>

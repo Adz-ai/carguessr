@@ -1,7 +1,9 @@
 package database
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,105 +83,98 @@ func (d *Database) initializeSchema() error {
 // CreateUser creates a new user in the database
 func (d *Database) CreateUser(user *models.User) error {
 	query := `
-		INSERT INTO users (username, email, password_hash, display_name, is_guest, session_token, avatar_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (username, password_hash, display_name, is_guest, session_token, avatar_url, security_question, security_answer_hash)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	
-	// Handle empty email as NULL to avoid UNIQUE constraint violations for guest users
-	var email interface{}
-	if user.Email == "" {
-		email = nil
-	} else {
-		email = user.Email
-	}
-	
-	result, err := d.db.Exec(query, user.Username, email, user.PasswordHash, 
-		user.DisplayName, user.IsGuest, user.SessionToken, user.AvatarURL)
+
+	result, err := d.db.Exec(query, user.Username, user.PasswordHash,
+		user.DisplayName, user.IsGuest, user.SessionToken, user.AvatarURL,
+		user.SecurityQuestion, user.SecurityAnswerHash)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	// Get the inserted user ID
 	id, err := result.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("failed to get user ID: %w", err)
 	}
-	
+
 	user.ID = int(id)
 	user.CreatedAt = time.Now()
 	user.LastActive = time.Now()
-	
+
 	return nil
 }
 
 // GetUserBySessionToken retrieves a user by their session token
 func (d *Database) GetUserBySessionToken(token string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, password_hash, avatar_url, session_token, is_guest, 
-		       created_at, last_active, total_games_played, favorite_difficulty
+		SELECT id, username, display_name, password_hash, avatar_url, session_token, is_guest, 
+		       security_question, security_answer_hash, created_at, last_active, total_games_played, favorite_difficulty
 		FROM users 
 		WHERE session_token = ?
 	`
-	
+
 	var user models.User
-	var email, passwordHash, avatarURL sql.NullString
-	
+	var passwordHash, avatarURL, securityQuestion, securityAnswerHash sql.NullString
+
 	err := d.db.QueryRow(query, token).Scan(
-		&user.ID, &user.Username, &user.DisplayName, &email, &passwordHash, 
-		&avatarURL, &user.SessionToken, &user.IsGuest, &user.CreatedAt, &user.LastActive, 
-		&user.TotalGamesPlayed, &user.FavoriteDifficulty,
+		&user.ID, &user.Username, &user.DisplayName, &passwordHash,
+		&avatarURL, &user.SessionToken, &user.IsGuest, &securityQuestion, &securityAnswerHash,
+		&user.CreatedAt, &user.LastActive, &user.TotalGamesPlayed, &user.FavoriteDifficulty,
 	)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	// Handle nullable fields
-	if email.Valid {
-		user.Email = email.String
-	}
 	if passwordHash.Valid {
 		user.PasswordHash = passwordHash.String
 	}
 	if avatarURL.Valid {
 		user.AvatarURL = avatarURL.String
 	}
-	
+	if securityQuestion.Valid {
+		user.SecurityQuestion = securityQuestion.String
+	}
+	if securityAnswerHash.Valid {
+		user.SecurityAnswerHash = securityAnswerHash.String
+	}
+
 	return &user, nil
 }
 
 // GetUserByUsername retrieves a user by username
 func (d *Database) GetUserByUsername(username string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, password_hash, avatar_url, session_token, is_guest, 
-		       created_at, last_active, total_games_played, favorite_difficulty
+		SELECT id, username, display_name, password_hash, avatar_url, session_token, is_guest, 
+		       security_question, security_answer_hash, created_at, last_active, total_games_played, favorite_difficulty
 		FROM users 
 		WHERE username = ? COLLATE NOCASE
 	`
-	
+
 	var user models.User
-	var email, passwordHash, avatarURL, sessionToken sql.NullString
-	
+	var passwordHash, avatarURL, sessionToken, securityQuestion, securityAnswerHash sql.NullString
+
 	err := d.db.QueryRow(query, username).Scan(
-		&user.ID, &user.Username, &user.DisplayName, &email, &passwordHash,
-		&avatarURL, &sessionToken, &user.IsGuest, &user.CreatedAt, &user.LastActive, 
-		&user.TotalGamesPlayed, &user.FavoriteDifficulty,
+		&user.ID, &user.Username, &user.DisplayName, &passwordHash,
+		&avatarURL, &sessionToken, &user.IsGuest, &securityQuestion, &securityAnswerHash,
+		&user.CreatedAt, &user.LastActive, &user.TotalGamesPlayed, &user.FavoriteDifficulty,
 	)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	// Handle nullable fields
-	if email.Valid {
-		user.Email = email.String
-	}
 	if passwordHash.Valid {
 		user.PasswordHash = passwordHash.String
 	}
@@ -189,7 +184,13 @@ func (d *Database) GetUserByUsername(username string) (*models.User, error) {
 	if sessionToken.Valid {
 		user.SessionToken = sessionToken.String
 	}
-	
+	if securityQuestion.Valid {
+		user.SecurityQuestion = securityQuestion.String
+	}
+	if securityAnswerHash.Valid {
+		user.SecurityAnswerHash = securityAnswerHash.String
+	}
+
 	return &user, nil
 }
 
@@ -200,35 +201,32 @@ func (d *Database) UpdateUserActivity(userID int) error {
 	return err
 }
 
-// GetUserByEmail retrieves a user by email
-func (d *Database) GetUserByEmail(email string) (*models.User, error) {
+// GetUserByDisplayName retrieves a user by display name
+func (d *Database) GetUserByDisplayName(displayName string) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, display_name, avatar_url, 
-			   is_guest, session_token, created_at, last_active, total_games_played, favorite_difficulty
+		SELECT id, username, password_hash, display_name, avatar_url, 
+			   is_guest, session_token, security_question, security_answer_hash, created_at, last_active, total_games_played, favorite_difficulty
 		FROM users 
-		WHERE email = ? COLLATE NOCASE
+		WHERE display_name = ? COLLATE NOCASE
 	`
-	
+
 	var user models.User
-	var userEmail, passwordHash, avatarURL, sessionToken sql.NullString
-	
-	err := d.db.QueryRow(query, email).Scan(
-		&user.ID, &user.Username, &userEmail, &passwordHash,
-		&user.DisplayName, &avatarURL, &user.IsGuest, &sessionToken,
+	var passwordHash, avatarURL, sessionToken, securityQuestion, securityAnswerHash sql.NullString
+
+	err := d.db.QueryRow(query, displayName).Scan(
+		&user.ID, &user.Username, &passwordHash, &user.DisplayName, &avatarURL,
+		&user.IsGuest, &sessionToken, &securityQuestion, &securityAnswerHash,
 		&user.CreatedAt, &user.LastActive, &user.TotalGamesPlayed, &user.FavoriteDifficulty,
 	)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	// Handle nullable fields
-	if userEmail.Valid {
-		user.Email = userEmail.String
-	}
 	if passwordHash.Valid {
 		user.PasswordHash = passwordHash.String
 	}
@@ -238,31 +236,49 @@ func (d *Database) GetUserByEmail(email string) (*models.User, error) {
 	if sessionToken.Valid {
 		user.SessionToken = sessionToken.String
 	}
-	
+	if securityQuestion.Valid {
+		user.SecurityQuestion = securityQuestion.String
+	}
+	if securityAnswerHash.Valid {
+		user.SecurityAnswerHash = securityAnswerHash.String
+	}
+
 	return &user, nil
 }
 
 // UpdateUserSession updates a user's session token
 func (d *Database) UpdateUserSession(userID int, sessionToken string) error {
 	query := `UPDATE users SET session_token = ?, last_active = ? WHERE id = ?`
-	
+
 	_, err := d.db.Exec(query, sessionToken, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to update user session: %w", err)
 	}
-	
+
 	return nil
 }
 
 // UpdateUserLastActive updates a user's last active time
 func (d *Database) UpdateUserLastActive(userID int) error {
 	query := `UPDATE users SET last_active = ? WHERE id = ?`
-	
+
 	_, err := d.db.Exec(query, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to update last active: %w", err)
 	}
-	
+
+	return nil
+}
+
+// UpdateUserPassword updates a user's password
+func (d *Database) UpdateUserPassword(userID int, passwordHash string) error {
+	query := `UPDATE users SET password_hash = ?, last_active = ? WHERE id = ?`
+
+	_, err := d.db.Exec(query, passwordHash, time.Now(), userID)
+	if err != nil {
+		return fmt.Errorf("failed to update user password: %w", err)
+	}
+
 	return nil
 }
 
@@ -270,16 +286,77 @@ func (d *Database) UpdateUserLastActive(userID int) error {
 func (d *Database) UpdateUser(user *models.User) error {
 	query := `
 		UPDATE users 
-		SET display_name = ?, email = ?, avatar_url = ?, favorite_difficulty = ?, last_active = ?
+		SET display_name = ?, avatar_url = ?, favorite_difficulty = ?, last_active = ?
 		WHERE id = ?
 	`
-	
-	_, err := d.db.Exec(query, user.DisplayName, user.Email, user.AvatarURL, 
+
+	_, err := d.db.Exec(query, user.DisplayName, user.AvatarURL,
 		user.FavoriteDifficulty, time.Now(), user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
-	
+
+	return nil
+}
+
+// UpdateUserFavoriteDifficulty calculates and updates user's favorite difficulty based on gameplay
+func (d *Database) UpdateUserFavoriteDifficulty(userID int) error {
+	// Count games played by difficulty
+	query := `
+		SELECT difficulty, COUNT(*) as count
+		FROM leaderboard_entries 
+		WHERE user_id = ?
+		GROUP BY difficulty
+		ORDER BY count DESC
+		LIMIT 1
+	`
+
+	var favoriteDifficulty string
+	var count int
+	err := d.db.QueryRow(query, userID).Scan(&favoriteDifficulty, &count)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// User has no games played, keep default
+			return nil
+		}
+		return fmt.Errorf("failed to calculate favorite difficulty: %w", err)
+	}
+
+	// Update user's favorite difficulty
+	updateQuery := `UPDATE users SET favorite_difficulty = ? WHERE id = ?`
+	_, err = d.db.Exec(updateQuery, favoriteDifficulty, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update favorite difficulty: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateAllUsersFavoriteDifficulty updates favorite difficulty for all users based on their gameplay
+func (d *Database) UpdateAllUsersFavoriteDifficulty() error {
+	query := `
+		UPDATE users 
+		SET favorite_difficulty = (
+			SELECT difficulty 
+			FROM leaderboard_entries 
+			WHERE user_id = users.id 
+			GROUP BY difficulty 
+			ORDER BY COUNT(*) DESC 
+			LIMIT 1
+		) 
+		WHERE id IN (
+			SELECT DISTINCT user_id 
+			FROM leaderboard_entries 
+			WHERE user_id IS NOT NULL
+		)
+	`
+
+	_, err := d.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("failed to update all users' favorite difficulty: %w", err)
+	}
+
 	return nil
 }
 
@@ -296,19 +373,19 @@ func (d *Database) CreateChallengeSession(session *models.ChallengeSession) erro
 		INSERT INTO challenge_sessions (session_id, user_id, difficulty, cars_json, current_car, total_score)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`
-	
+
 	var userID *int
 	if session.UserID != 0 {
 		userID = &session.UserID
 	}
-	
-	_, err = d.db.Exec(query, session.SessionID, userID, session.Difficulty, 
+
+	_, err = d.db.Exec(query, session.SessionID, userID, session.Difficulty,
 		string(carsJSON), session.CurrentCar, session.TotalScore)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create challenge session: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -320,47 +397,47 @@ func (d *Database) GetChallengeSession(sessionID string) (*models.ChallengeSessi
 		FROM challenge_sessions 
 		WHERE session_id = ? AND expires_at > CURRENT_TIMESTAMP
 	`
-	
+
 	var session models.ChallengeSession
 	var userID sql.NullInt64
 	var carsJSON string
 	var completedAt sql.NullTime
-	
+
 	err := d.db.QueryRow(query, sessionID).Scan(
 		&session.SessionID, &userID, &session.Difficulty, &carsJSON,
 		&session.CurrentCar, &session.TotalScore, &session.IsComplete,
 		&session.StartTime, &completedAt,
 	)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Session not found or expired
 		}
 		return nil, fmt.Errorf("failed to get challenge session: %w", err)
 	}
-	
+
 	// Parse user ID
 	if userID.Valid {
 		session.UserID = int(userID.Int64)
 	}
-	
+
 	// Parse completed time
 	if completedAt.Valid {
 		session.CompletedTime = completedAt.Time.Format(time.RFC3339)
 	}
-	
+
 	// Parse cars JSON
 	if err := json.Unmarshal([]byte(carsJSON), &session.Cars); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cars: %w", err)
 	}
-	
+
 	// Load guesses
 	guesses, err := d.getChallengeGuesses(sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load guesses: %w", err)
 	}
 	session.Guesses = guesses
-	
+
 	return &session, nil
 }
 
@@ -371,20 +448,20 @@ func (d *Database) UpdateChallengeSession(session *models.ChallengeSession) erro
 		SET current_car = ?, total_score = ?, is_complete = ?, completed_at = ?
 		WHERE session_id = ?
 	`
-	
+
 	var completedAt *time.Time
 	if session.IsComplete {
 		now := time.Now()
 		completedAt = &now
 	}
-	
-	_, err := d.db.Exec(query, session.CurrentCar, session.TotalScore, 
+
+	_, err := d.db.Exec(query, session.CurrentCar, session.TotalScore,
 		session.IsComplete, completedAt, session.SessionID)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update challenge session: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -395,14 +472,14 @@ func (d *Database) AddChallengeGuess(sessionID string, guess *models.ChallengeGu
 		(session_id, car_index, car_id, guessed_price, actual_price, points, accuracy_percentage)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	
+
 	_, err := d.db.Exec(query, sessionID, guess.CarIndex, guess.CarID,
 		guess.GuessedPrice, guess.ActualPrice, guess.Points, guess.Percentage)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to add challenge guess: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -414,27 +491,27 @@ func (d *Database) getChallengeGuesses(sessionID string) ([]models.ChallengeGues
 		WHERE session_id = ?
 		ORDER BY car_index
 	`
-	
+
 	rows, err := d.db.Query(query, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var guesses []models.ChallengeGuess
 	for rows.Next() {
 		var guess models.ChallengeGuess
 		var createdAt time.Time
-		
+
 		err := rows.Scan(&guess.CarIndex, &guess.CarID, &guess.GuessedPrice,
 			&guess.ActualPrice, &guess.Points, &guess.Percentage, &createdAt)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		guesses = append(guesses, guess)
 	}
-	
+
 	return guesses, nil
 }
 
@@ -447,19 +524,19 @@ func (d *Database) CreateFriendChallenge(challenge *models.FriendChallenge) erro
 		(challenge_code, title, creator_user_id, template_session_id, difficulty, max_participants, is_active, created_at, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	
+
 	result, err := d.db.Exec(query, challenge.ChallengeCode, challenge.Title, challenge.CreatorUserID,
 		challenge.TemplateSessionID, challenge.Difficulty, challenge.MaxParticipants, challenge.IsActive,
 		challenge.CreatedAt, challenge.ExpiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to create friend challenge: %w", err)
 	}
-	
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("failed to get challenge ID: %w", err)
 	}
-	
+
 	challenge.ID = int(id)
 	return nil
 }
@@ -467,13 +544,13 @@ func (d *Database) CreateFriendChallenge(challenge *models.FriendChallenge) erro
 // ChallengeCodeExists checks if a challenge code already exists
 func (d *Database) ChallengeCodeExists(code string) (bool, error) {
 	query := `SELECT COUNT(*) FROM friend_challenges WHERE challenge_code = ? AND is_active = TRUE AND expires_at > ?`
-	
+
 	var count int
 	err := d.db.QueryRow(query, code, time.Now()).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check challenge code: %w", err)
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -487,21 +564,21 @@ func (d *Database) GetFriendChallengeByCode(code string) (*models.FriendChalleng
 		JOIN users u ON fc.creator_user_id = u.id
 		WHERE fc.challenge_code = ? AND fc.is_active = TRUE AND fc.expires_at > ?
 	`
-	
+
 	var challenge models.FriendChallenge
 	err := d.db.QueryRow(query, code, time.Now()).Scan(
 		&challenge.ID, &challenge.ChallengeCode, &challenge.Title, &challenge.CreatorUserID,
 		&challenge.TemplateSessionID, &challenge.Difficulty, &challenge.MaxParticipants,
 		&challenge.IsActive, &challenge.CreatedAt, &challenge.ExpiresAt, &challenge.CreatorDisplayName,
 	)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("challenge not found")
 		}
 		return nil, fmt.Errorf("failed to get challenge: %w", err)
 	}
-	
+
 	return &challenge, nil
 }
 
@@ -512,18 +589,18 @@ func (d *Database) AddChallengeParticipant(participant *models.ChallengeParticip
 		(friend_challenge_id, user_id, session_id, joined_at)
 		VALUES (?, ?, ?, ?)
 	`
-	
+
 	result, err := d.db.Exec(query, participant.FriendChallengeID, participant.UserID,
 		participant.SessionID, participant.JoinedAt)
 	if err != nil {
 		return fmt.Errorf("failed to add participant: %w", err)
 	}
-	
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("failed to get participant ID: %w", err)
 	}
-	
+
 	participant.ID = int(id)
 	return nil
 }
@@ -539,26 +616,26 @@ func (d *Database) GetChallengeParticipants(challengeID int) ([]models.Challenge
 		WHERE cp.friend_challenge_id = ?
 		ORDER BY cp.rank_position ASC, cp.joined_at ASC
 	`
-	
+
 	rows, err := d.db.Query(query, challengeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get participants: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var participants []models.ChallengeParticipant
 	for rows.Next() {
 		var p models.ChallengeParticipant
 		var finalScore sql.NullInt64
 		var rankPosition sql.NullInt64
 		var completedAt sql.NullTime
-		
+
 		err := rows.Scan(&p.ID, &p.FriendChallengeID, &p.UserID, &p.SessionID,
 			&finalScore, &rankPosition, &completedAt, &p.JoinedAt, &p.UserDisplayName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan participant: %w", err)
 		}
-		
+
 		if finalScore.Valid {
 			score := int(finalScore.Int64)
 			p.FinalScore = &score
@@ -570,10 +647,10 @@ func (d *Database) GetChallengeParticipants(challengeID int) ([]models.Challenge
 		if completedAt.Valid {
 			p.CompletedAt = &completedAt.Time
 		}
-		
+
 		participants = append(participants, p)
 	}
-	
+
 	return participants, nil
 }
 
@@ -587,23 +664,23 @@ func (d *Database) GetUserChallengeParticipation(challengeID, userID int) (*mode
 		JOIN users u ON cp.user_id = u.id
 		WHERE cp.friend_challenge_id = ? AND cp.user_id = ?
 	`
-	
+
 	var p models.ChallengeParticipant
 	var finalScore sql.NullInt64
 	var rankPosition sql.NullInt64
 	var completedAt sql.NullTime
-	
+
 	err := d.db.QueryRow(query, challengeID, userID).Scan(
 		&p.ID, &p.FriendChallengeID, &p.UserID, &p.SessionID,
 		&finalScore, &rankPosition, &completedAt, &p.JoinedAt, &p.UserDisplayName)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("participation not found")
 		}
 		return nil, fmt.Errorf("failed to get participation: %w", err)
 	}
-	
+
 	if finalScore.Valid {
 		score := int(finalScore.Int64)
 		p.FinalScore = &score
@@ -615,7 +692,7 @@ func (d *Database) GetUserChallengeParticipation(challengeID, userID int) (*mode
 	if completedAt.Valid {
 		p.CompletedAt = &completedAt.Time
 	}
-	
+
 	return &p, nil
 }
 
@@ -637,19 +714,19 @@ func (d *Database) GetUserCreatedChallenges(userID int) ([]models.FriendChalleng
 		GROUP BY fc.id, creator_cp.joined_at, creator_cs.is_complete
 		ORDER BY fc.created_at DESC
 	`
-	
+
 	rows, err := d.db.Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get created challenges: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var challenges []models.FriendChallenge
 	for rows.Next() {
 		var c models.FriendChallenge
 		var joinedAt *time.Time
 		var isComplete *bool
-		
+
 		err := rows.Scan(&c.ID, &c.ChallengeCode, &c.Title, &c.CreatorUserID,
 			&c.TemplateSessionID, &c.Difficulty, &c.MaxParticipants, &c.IsActive,
 			&c.CreatedAt, &c.ExpiresAt, &c.CreatorDisplayName, &c.ParticipantCount,
@@ -657,7 +734,7 @@ func (d *Database) GetUserCreatedChallenges(userID int) ([]models.FriendChalleng
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan challenge: %w", err)
 		}
-		
+
 		// Set creator participation fields (if they've joined their own challenge)
 		c.JoinedAt = joinedAt
 		if isComplete != nil {
@@ -665,10 +742,10 @@ func (d *Database) GetUserCreatedChallenges(userID int) ([]models.FriendChalleng
 		} else {
 			c.IsComplete = false
 		}
-		
+
 		challenges = append(challenges, c)
 	}
-	
+
 	return challenges, nil
 }
 
@@ -690,19 +767,19 @@ func (d *Database) GetUserParticipatingChallenges(userID int) ([]models.FriendCh
 		GROUP BY fc.id, cp.joined_at, cs.is_complete
 		ORDER BY fc.created_at DESC
 	`
-	
+
 	rows, err := d.db.Query(query, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get participating challenges: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var challenges []models.FriendChallenge
 	for rows.Next() {
 		var c models.FriendChallenge
 		var joinedAt time.Time
 		var isComplete *bool
-		
+
 		err := rows.Scan(&c.ID, &c.ChallengeCode, &c.Title, &c.CreatorUserID,
 			&c.TemplateSessionID, &c.Difficulty, &c.MaxParticipants, &c.IsActive,
 			&c.CreatedAt, &c.ExpiresAt, &c.CreatorDisplayName, &c.ParticipantCount,
@@ -710,7 +787,7 @@ func (d *Database) GetUserParticipatingChallenges(userID int) ([]models.FriendCh
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan challenge: %w", err)
 		}
-		
+
 		// Set participant-specific fields
 		c.JoinedAt = &joinedAt
 		if isComplete != nil {
@@ -718,10 +795,10 @@ func (d *Database) GetUserParticipatingChallenges(userID int) ([]models.FriendCh
 		} else {
 			c.IsComplete = false
 		}
-		
+
 		challenges = append(challenges, c)
 	}
-	
+
 	return challenges, nil
 }
 
@@ -735,7 +812,7 @@ func (d *Database) CalculateChallengeRankings(challengeID int, participants []mo
 			completedParticipants = append(completedParticipants, p)
 		}
 	}
-	
+
 	// Simple bubble sort for ranking
 	for i := 0; i < len(completedParticipants); i++ {
 		for j := i + 1; j < len(completedParticipants); j++ {
@@ -752,7 +829,7 @@ func (d *Database) CalculateChallengeRankings(challengeID int, participants []mo
 			}
 		}
 	}
-	
+
 	// Update rankings in database
 	for i, p := range completedParticipants {
 		rank := i + 1
@@ -762,12 +839,157 @@ func (d *Database) CalculateChallengeRankings(challengeID int, participants []mo
 			return fmt.Errorf("failed to update ranking: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
-// generateSessionToken generates a random session token
+// GetUserLeaderboardRank gets a user's rank on the leaderboard for a specific game mode and difficulty
+func (d *Database) GetUserLeaderboardRank(userID int, gameMode string, difficulty string) (*int, error) {
+	// First get the user's best score for this game mode and difficulty
+	bestScoreQuery := `
+		SELECT MAX(score) as best_score
+		FROM leaderboard_entries 
+		WHERE user_id = ? AND game_mode = ? AND difficulty = ?
+	`
+
+	var bestScore sql.NullInt64
+	err := d.db.QueryRow(bestScoreQuery, userID, gameMode, difficulty).Scan(&bestScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user's best score: %w", err)
+	}
+
+	// If user has no scores, return nil (no rank)
+	if !bestScore.Valid {
+		return nil, nil
+	}
+
+	// Now count how many registered users have a better score (registered users only ranking)
+	rankQuery := `
+		SELECT COUNT(DISTINCT user_id) + 1 as rank
+		FROM leaderboard_entries 
+		WHERE game_mode = ? AND difficulty = ? 
+		AND user_id IS NOT NULL AND user_id > 0
+		AND (
+			SELECT MAX(score) 
+			FROM leaderboard_entries le2 
+			WHERE le2.user_id = leaderboard_entries.user_id 
+			AND le2.game_mode = ? AND le2.difficulty = ?
+		) > ?
+	`
+
+	var rank int
+	err = d.db.QueryRow(rankQuery, gameMode, difficulty, gameMode, difficulty, bestScore.Int64).Scan(&rank)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate user rank: %w", err)
+	}
+
+	return &rank, nil
+}
+
+// GetUserOverallLeaderboardRank gets a user's rank against ALL entries (including legacy guest entries)
+func (d *Database) GetUserOverallLeaderboardRank(userID int, gameMode string, difficulty string) (*int, error) {
+	// First get the user's best score for this game mode and difficulty
+	bestScoreQuery := `
+		SELECT MAX(score) as best_score
+		FROM leaderboard_entries 
+		WHERE user_id = ? AND game_mode = ? AND difficulty = ?
+	`
+
+	var bestScore sql.NullInt64
+	err := d.db.QueryRow(bestScoreQuery, userID, gameMode, difficulty).Scan(&bestScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user's best score: %w", err)
+	}
+
+	// If user has no scores, return nil (no rank)
+	if !bestScore.Valid {
+		return nil, nil
+	}
+
+	// Count how many distinct users (including legacy entries) have a better score
+	// For legacy entries without user_id, treat each entry as a unique user
+	rankQuery := `
+		WITH user_best_scores AS (
+			SELECT 
+				CASE 
+					WHEN user_id IS NULL OR user_id = 0 THEN 'guest_' || id 
+					ELSE CAST(user_id AS TEXT) 
+				END as unique_user,
+				MAX(score) as best_score
+			FROM leaderboard_entries 
+			WHERE game_mode = ? AND difficulty = ?
+			GROUP BY unique_user
+		)
+		SELECT COUNT(*) + 1 as rank
+		FROM user_best_scores 
+		WHERE best_score > ?
+	`
+
+	var rank int
+	err = d.db.QueryRow(rankQuery, gameMode, difficulty, bestScore.Int64).Scan(&rank)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate overall user rank: %w", err)
+	}
+
+	return &rank, nil
+}
+
+// GetUserLeaderboardStats gets comprehensive leaderboard statistics for a user
+func (d *Database) GetUserLeaderboardStats(userID int) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	difficulties := []string{"easy", "hard"}
+	gameModes := []string{"challenge", "streak"}
+
+	for _, difficulty := range difficulties {
+		for _, gameMode := range gameModes {
+			// Get registered users rank
+			registeredRank, err := d.GetUserLeaderboardRank(userID, gameMode, difficulty)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get registered rank for %s %s: %w", gameMode, difficulty, err)
+			}
+
+			// Get overall rank (including legacy entries)
+			overallRank, err := d.GetUserOverallLeaderboardRank(userID, gameMode, difficulty)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get overall rank for %s %s: %w", gameMode, difficulty, err)
+			}
+
+			// Store registered users rank
+			registeredKey := fmt.Sprintf("%s_%s_registered_rank", gameMode, difficulty)
+			if registeredRank != nil {
+				stats[registeredKey] = *registeredRank
+			} else {
+				stats[registeredKey] = nil
+			}
+
+			// Store overall rank
+			overallKey := fmt.Sprintf("%s_%s_overall_rank", gameMode, difficulty)
+			if overallRank != nil {
+				stats[overallKey] = *overallRank
+			} else {
+				stats[overallKey] = nil
+			}
+
+			// Keep the old key for backward compatibility (registered rank)
+			legacyKey := fmt.Sprintf("%s_%s_rank", gameMode, difficulty)
+			if registeredRank != nil {
+				stats[legacyKey] = *registeredRank
+			} else {
+				stats[legacyKey] = nil
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+// generateSessionToken generates a cryptographically secure random session token
 func generateSessionToken() string {
-	// Simple implementation - in production you'd want crypto/rand
-	return fmt.Sprintf("%d%d", time.Now().UnixNano(), time.Now().Unix()%10000)
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to time-based if crypto/rand fails
+		return fmt.Sprintf("%d%d", time.Now().UnixNano(), time.Now().Unix()%10000)
+	}
+	return hex.EncodeToString(bytes)
 }

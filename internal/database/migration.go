@@ -163,9 +163,9 @@ func (d *Database) AddLeaderboardEntry(entry *models.LeaderboardEntry) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := d.db.Exec(query, entry.UserID, entry.Name, entry.Score, 
+	_, err := d.db.Exec(query, entry.UserID, entry.Name, entry.Score,
 		entry.GameMode, entry.Difficulty, entry.SessionID, entry.FriendChallengeID)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to add leaderboard entry: %w", err)
 	}
@@ -176,23 +176,23 @@ func (d *Database) AddLeaderboardEntry(entry *models.LeaderboardEntry) error {
 // BackupCurrentData creates a backup of current JSON files before migration
 func (d *Database) BackupCurrentData(dataDir string) error {
 	backupDir := fmt.Sprintf("%s/backup_%d", dataDir, time.Now().Unix())
-	
+
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
 	// Files to backup
 	files := []string{"leaderboard.json", "bonhams_cache.json", "lookers_cache.json"}
-	
+
 	for _, filename := range files {
 		srcPath := fmt.Sprintf("%s/%s", dataDir, filename)
 		dstPath := fmt.Sprintf("%s/%s", backupDir, filename)
-		
+
 		// Check if source file exists
 		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
 			continue // Skip if file doesn't exist
 		}
-		
+
 		// Copy file
 		if err := copyFile(srcPath, dstPath); err != nil {
 			return fmt.Errorf("failed to backup %s: %w", filename, err)

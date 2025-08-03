@@ -27,6 +27,7 @@ async function checkAuthStatus() {
         if (response.ok) {
             const data = await response.json();
             currentUser = data.user;
+            currentUser.leaderboardStats = data.leaderboardStats;
             showAuthenticatedUI();
         } else {
             // Token invalid, clear it
@@ -45,8 +46,9 @@ function showAuthenticatedUI() {
     document.getElementById('userMenu').style.display = 'block';
     document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.username;
     
-    // Show friend challenge section
+    // Show friend challenge section, hide signup promotion
     document.getElementById('friendChallengeSection').style.display = 'block';
+    document.getElementById('signupPromotionSection').style.display = 'none';
     document.getElementById('challengesBtn').style.display = 'inline-block';
 }
 
@@ -55,6 +57,7 @@ function showUnauthenticatedUI() {
     document.getElementById('loginBtn').style.display = 'inline-block';
     document.getElementById('userMenu').style.display = 'none';
     document.getElementById('friendChallengeSection').style.display = 'none';
+    document.getElementById('signupPromotionSection').style.display = 'block';
     document.getElementById('challengesBtn').style.display = 'none';
 }
 
@@ -139,8 +142,9 @@ async function handleRegister(event) {
     
     const username = document.getElementById('registerUsername').value;
     const displayName = document.getElementById('registerDisplayName').value;
-    const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
+    const securityQuestion = document.getElementById('registerSecurityQuestion').value;
+    const securityAnswer = document.getElementById('registerSecurityAnswer').value;
     
     try {
         const response = await fetch('/api/auth/register', {
@@ -148,7 +152,7 @@ async function handleRegister(event) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username, displayName, email, password })
+            body: JSON.stringify({ username, displayName, password, securityQuestion, securityAnswer })
         });
         
         const data = await response.json();
@@ -615,7 +619,22 @@ async function loadUserStats() {
         // For now, we'll show basic stats from the user object
         // In the future, you could add a dedicated stats endpoint
         document.getElementById('totalGamesPlayed').textContent = currentUser.totalGamesPlayed || 0;
-        document.getElementById('favoriteDifficulty').textContent = currentUser.favoriteDifficulty || 'Not set';
+        // Display favorite difficulty with proper capitalization
+        const favDifficulty = currentUser.favoriteDifficulty;
+        let displayText = 'None yet';
+        if (favDifficulty === 'easy') {
+            displayText = 'Easy';
+        } else if (favDifficulty === 'hard') {
+            displayText = 'Hard';
+        }
+        document.getElementById('favoriteDifficulty').textContent = displayText;
+        
+        // Display leaderboard ranks (both registered and overall)
+        const leaderboardStats = currentUser.leaderboardStats || {};
+        document.getElementById('challengeEasyRegisteredRank').textContent = leaderboardStats.challenge_easy_registered_rank || 'N/A';
+        document.getElementById('challengeEasyOverallRank').textContent = leaderboardStats.challenge_easy_overall_rank || 'N/A';
+        document.getElementById('challengeHardRegisteredRank').textContent = leaderboardStats.challenge_hard_registered_rank || 'N/A';
+        document.getElementById('challengeHardOverallRank').textContent = leaderboardStats.challenge_hard_overall_rank || 'N/A';
         
         // These would come from the challenges data
         const token = localStorage.getItem('sessionToken');
@@ -768,6 +787,90 @@ styleSheet.textContent = toastStyles;
 document.head.appendChild(styleSheet);
 
 // Export functions for use in game.js
+// Password reset functions
+function showPasswordReset() {
+    closeAllModals();
+    document.getElementById('passwordResetModal').style.display = 'flex';
+    // Reset form state
+    document.getElementById('securityQuestionSection').style.display = 'none';
+    document.getElementById('verifyUserBtn').style.display = 'inline-block';
+    document.getElementById('resetPasswordBtn').style.display = 'none';
+    document.getElementById('passwordResetForm').reset();
+}
+
+async function verifyUserForReset() {
+    const username = document.getElementById('resetUsername').value;
+    const displayName = document.getElementById('resetDisplayName').value;
+    
+    if (!username || !displayName) {
+        showToast('Please enter both username and display name', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/security-question', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, displayName })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show the actual security question the user set
+            document.getElementById('securityQuestionText').textContent = data.securityQuestion;
+            document.getElementById('securityQuestionSection').style.display = 'block';
+            document.getElementById('verifyUserBtn').style.display = 'none';
+            document.getElementById('resetPasswordBtn').style.display = 'inline-block';
+        } else {
+            showToast(data.message || 'User not found with those credentials', 'error');
+        }
+    } catch (error) {
+        console.error('Verification error:', error);
+        showToast('Failed to verify user. Please try again.', 'error');
+    }
+}
+
+async function handlePasswordReset(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('resetUsername').value;
+    const displayName = document.getElementById('resetDisplayName').value;
+    const securityAnswer = document.getElementById('resetSecurityAnswer').value;
+    const newPassword = document.getElementById('resetNewPassword').value;
+    
+    try {
+        const response = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, displayName, securityAnswer, newPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Password reset successfully! You can now login.', 'success');
+            closeModal('passwordResetModal');
+            showLoginModal();
+        } else {
+            showToast(data.message || 'Password reset failed', 'error');
+        }
+    } catch (error) {
+        console.error('Password reset error:', error);
+        showToast('Password reset failed. Please try again.', 'error');
+    }
+}
+
+// Challenge guide function
+function showChallengeGuide() {
+    closeAllModals();
+    document.getElementById('challengeGuideModal').style.display = 'flex';
+}
+
 window.authFunctions = {
     checkAuthStatus,
     showChallengeLeaderboard,

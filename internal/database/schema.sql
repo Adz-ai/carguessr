@@ -8,12 +8,13 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
-    email TEXT UNIQUE COLLATE NOCASE,
-    password_hash TEXT, -- For future authentication
-    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL, -- bcrypt hashed password
+    display_name TEXT UNIQUE NOT NULL COLLATE NOCASE, -- Made unique and required
     avatar_url TEXT,
-    is_guest BOOLEAN DEFAULT TRUE, -- Support for guest users initially
+    is_guest BOOLEAN DEFAULT FALSE, -- Changed default to FALSE since we removed guest accounts
     session_token TEXT UNIQUE, -- Simple session management
+    security_question TEXT NOT NULL, -- Security question for password reset
+    security_answer_hash TEXT NOT NULL, -- bcrypt hashed security answer
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_active DATETIME DEFAULT CURRENT_TIMESTAMP,
     total_games_played INTEGER DEFAULT 0,

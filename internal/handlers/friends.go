@@ -11,6 +11,7 @@ import (
 
 	"autotraderguesser/internal/database"
 	"autotraderguesser/internal/models"
+	"autotraderguesser/internal/validation"
 )
 
 type FriendsHandler struct {
@@ -56,7 +57,7 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 
 	// Generate unique 6-character challenge code
 	challengeCode := generateChallengeCode()
-	
+
 	// Ensure uniqueness (retry if collision)
 	for attempts := 0; attempts < 5; attempts++ {
 		if exists, err := h.db.ChallengeCodeExists(challengeCode); err != nil {
@@ -122,13 +123,13 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 
 	// Return challenge details including creator's session ID
 	c.JSON(http.StatusCreated, gin.H{
-		"success":         true,
-		"message":         "Friend challenge created successfully!",
-		"challenge":       challenge,
-		"challengeCode":   challengeCode,
-		"sessionId":       templateSession.SessionID, // Add creator's session ID
+		"success":          true,
+		"message":          "Friend challenge created successfully!",
+		"challenge":        challenge,
+		"challengeCode":    challengeCode,
+		"sessionId":        templateSession.SessionID, // Add creator's session ID
 		"participantCount": 1,
-		"shareMessage":    fmt.Sprintf("Join my CarGuessr challenge '%s'! Use code: %s", req.Title, challengeCode),
+		"shareMessage":     fmt.Sprintf("Join my CarGuessr challenge '%s'! Use code: %s", req.Title, challengeCode),
 	})
 }
 
@@ -136,10 +137,11 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 func (h *FriendsHandler) GetFriendChallenge(c *gin.Context) {
 	challengeCode := strings.ToUpper(c.Param("code"))
 
-	if len(challengeCode) != 6 {
+	// Validate challenge code format
+	if err := validation.ValidateChallengeCode(challengeCode); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Challenge code must be 6 characters",
+			"message": "Invalid challenge code format",
 		})
 		return
 	}
@@ -187,10 +189,11 @@ func (h *FriendsHandler) JoinFriendChallenge(c *gin.Context) {
 	u := user.(*models.User)
 	challengeCode := strings.ToUpper(c.Param("code"))
 
-	if len(challengeCode) != 6 {
+	// Validate challenge code format
+	if err := validation.ValidateChallengeCode(challengeCode); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Challenge code must be 6 characters",
+			"message": "Invalid challenge code format",
 		})
 		return
 	}
@@ -254,15 +257,15 @@ func (h *FriendsHandler) JoinFriendChallenge(c *gin.Context) {
 
 	// Create participant's session (copy of template with new session ID)
 	participantSession := &models.ChallengeSession{
-		SessionID:     generateSessionID(),
-		UserID:        u.ID,
-		Difficulty:    challenge.Difficulty,
-		Cars:          templateSession.Cars, // Same cars as template
-		CurrentCar:    0,
-		Guesses:       []models.ChallengeGuess{},
-		TotalScore:    0,
-		IsComplete:    false,
-		StartTime:     time.Now().Format(time.RFC3339),
+		SessionID:  generateSessionID(),
+		UserID:     u.ID,
+		Difficulty: challenge.Difficulty,
+		Cars:       templateSession.Cars, // Same cars as template
+		CurrentCar: 0,
+		Guesses:    []models.ChallengeGuess{},
+		TotalScore: 0,
+		IsComplete: false,
+		StartTime:  time.Now().Format(time.RFC3339),
 	}
 
 	if err := h.db.CreateChallengeSession(participantSession); err != nil {
@@ -301,10 +304,11 @@ func (h *FriendsHandler) JoinFriendChallenge(c *gin.Context) {
 func (h *FriendsHandler) GetChallengeLeaderboard(c *gin.Context) {
 	challengeCode := strings.ToUpper(c.Param("code"))
 
-	if len(challengeCode) != 6 {
+	// Validate challenge code format
+	if err := validation.ValidateChallengeCode(challengeCode); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Challenge code must be 6 characters",
+			"message": "Invalid challenge code format",
 		})
 		return
 	}
@@ -334,7 +338,7 @@ func (h *FriendsHandler) GetChallengeLeaderboard(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		
+
 		participants[i].IsComplete = session.IsComplete
 		if session.IsComplete {
 			participants[i].FinalScore = &session.TotalScore
@@ -372,10 +376,11 @@ func (h *FriendsHandler) GetUserParticipation(c *gin.Context) {
 	u := user.(*models.User)
 	challengeCode := strings.ToUpper(c.Param("code"))
 
-	if len(challengeCode) != 6 {
+	// Validate challenge code format
+	if err := validation.ValidateChallengeCode(challengeCode); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Challenge code must be 6 characters",
+			"message": "Invalid challenge code format",
 		})
 		return
 	}
@@ -463,11 +468,11 @@ func generateChallengeCode() string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	bytes := make([]byte, 6)
 	rand.Read(bytes)
-	
+
 	for i := range bytes {
 		bytes[i] = charset[bytes[i]%byte(len(charset))]
 	}
-	
+
 	return string(bytes)
 }
 
