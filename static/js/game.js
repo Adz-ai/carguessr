@@ -1323,6 +1323,17 @@ function closeLeaderboard() {
     console.log('Closing leaderboard, leaderboardShownAfterSubmission:', currentGame.leaderboardShownAfterSubmission);
     if (currentGame.leaderboardShownAfterSubmission) {
         console.log('Reloading page to go back to homepage');
+        // Clear any game state before reloading to ensure clean homepage
+        currentGame = {
+            mode: 'challenge',
+            difficulty: 'hard',
+            score: 0,
+            sessionId: generateSessionId(),
+            challengeSession: null,
+            challengeGuesses: [],
+            pendingLeaderboardData: null,
+            leaderboardShownAfterSubmission: false
+        };
         location.reload();
     }
 }
