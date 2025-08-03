@@ -574,7 +574,7 @@ header h1 {
 
 .main-car-image {
     width: 100%;
-    height: 450px;
+    aspect-ratio: 4/3;
     object-fit: cover;
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -1089,7 +1089,8 @@ header h1 {
     }
     
     .main-car-image {
-        height: 300px;
+        aspect-ratio: 4/3;
+        object-fit: cover;
     }
     
     .car-details {

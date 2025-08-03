@@ -99,11 +99,22 @@ async function loadNextCar() {
     try {
         // Include difficulty parameter in the request
         const difficultyParam = currentGame.difficulty ? `?difficulty=${currentGame.difficulty}` : '';
-        let response = await fetch(`/api/random-enhanced-listing${difficultyParam}`);
+        
+        // Prepare headers with session ID for car history tracking
+        const headers = {};
+        if (currentGame.sessionId) {
+            headers['X-Session-ID'] = currentGame.sessionId;
+        }
+        
+        let response = await fetch(`/api/random-enhanced-listing${difficultyParam}`, {
+            headers: headers
+        });
         
         if (!response.ok) {
             console.log('Enhanced listing not available, falling back to standard');
-            response = await fetch('/api/random-listing');
+            response = await fetch('/api/random-listing', {
+                headers: headers
+            });
             if (!response.ok) throw new Error('Failed to load listing');
         }
         
@@ -312,7 +323,7 @@ function handleImageError(imgElement, originalUrl) {
     }
     
     // Set placeholder image
-    imgElement.src = 'https://via.placeholder.com/600x400?text=Image+Not+Available';
+    imgElement.src = 'https://www.travelodge.co.uk/nw/assets/img/photo/image-unavailable.png';
     imgElement.style.filter = 'grayscale(1)';
 }
 
@@ -744,7 +755,13 @@ function displayChallengeResult(result) {
     const originalLinkDiv = document.getElementById('originalLink');
     if (result.originalUrl) {
         originalLinkDiv.style.display = 'block';
-        originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">View Original Auction Listing on Bonhams</a>`;
+        let linkText = 'View Original Listing';
+        if (result.originalUrl.includes('bonhams')) {
+            linkText = 'View Original Auction Listing on Bonhams';
+        } else if (result.originalUrl.includes('lookers')) {
+            linkText = 'View Original Listing on Lookers';
+        }
+        originalLinkDiv.innerHTML = `<a href="${result.originalUrl}" target="_blank" class="original-link">${linkText}</a>`;
     } else {
         originalLinkDiv.style.display = 'none';
     }

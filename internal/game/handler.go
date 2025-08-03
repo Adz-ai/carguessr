@@ -34,6 +34,7 @@ type Handler struct {
 	zeroScores           map[string]float64
 	streakScores         map[string]int
 	challengeSessions    map[string]*models.ChallengeSession // Store challenge sessions
+	recentlyShown        map[string][]string                 // Track recently shown car IDs per session
 	bonhamsRefreshTicker *time.Ticker                        // Auto-refresh for Bonhams (7 days)
 	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
 }
@@ -47,6 +48,7 @@ func NewHandler() *Handler {
 		zeroScores:        make(map[string]float64),
 		streakScores:      make(map[string]int),
 		challengeSessions: make(map[string]*models.ChallengeSession),
+		recentlyShown:     make(map[string][]string),
 	}
 
 	// Initialize both scrapers before starting (both modes must be ready)
@@ -84,8 +86,14 @@ func NewHandler() *Handler {
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/random-listing [get]
 func (h *Handler) GetRandomListing(c *gin.Context) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	// Get session ID from header for history tracking
+	sessionID := c.GetHeader("X-Session-ID")
+	if sessionID == "" {
+		sessionID = generateSessionID()
+	}
+
+	h.mu.Lock() // Using Lock instead of RLock because we modify recentlyShown
+	defer h.mu.Unlock()
 
 	// Get all Bonhams listing IDs
 	ids := make([]string, 0, len(h.bonhamsListings))
@@ -98,8 +106,10 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 		return
 	}
 
-	// Select random listing
-	randomID := ids[rand.Intn(len(ids))]
+	// Select random listing avoiding recently shown cars
+	randomID := h.selectRandomCarWithHistory(sessionID, ids)
+	h.addToRecentlyShown(sessionID, randomID)
+
 	bonhamsListing := h.bonhamsListings[randomID]
 
 	// Convert to enhanced format and hide price
@@ -121,8 +131,14 @@ func (h *Handler) GetRandomListing(c *gin.Context) {
 func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 	difficulty := c.DefaultQuery("difficulty", "hard") // Default to hard mode for backward compatibility
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	// Get session ID from header (frontend should send this)
+	sessionID := c.GetHeader("X-Session-ID")
+	if sessionID == "" {
+		sessionID = generateSessionID() // Generate one if not provided
+	}
+
+	h.mu.Lock() // Using Lock instead of RLock because we modify recentlyShown
+	defer h.mu.Unlock()
 
 	if difficulty == "easy" {
 		// Easy mode - use Lookers listings
@@ -137,8 +153,10 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 			ids = append(ids, id)
 		}
 
-		// Select random listing
-		randomID := ids[rand.Intn(len(ids))]
+		// Select random listing avoiding recently shown cars
+		randomID := h.selectRandomCarWithHistory(sessionID, ids)
+		h.addToRecentlyShown(sessionID, randomID)
+
 		lookersListing := h.lookersListings[randomID]
 
 		// Convert to enhanced format and hide price
@@ -159,8 +177,10 @@ func (h *Handler) GetRandomEnhancedListing(c *gin.Context) {
 			ids = append(ids, id)
 		}
 
-		// Select random listing
-		randomID := ids[rand.Intn(len(ids))]
+		// Select random listing avoiding recently shown cars
+		randomID := h.selectRandomCarWithHistory(sessionID, ids)
+		h.addToRecentlyShown(sessionID, randomID)
+
 		bonhamsListing := h.bonhamsListings[randomID]
 
 		// Convert to enhanced format and hide price
@@ -1294,6 +1314,50 @@ func generateSessionID() string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+// addToRecentlyShown adds a car ID to the recently shown list for a session
+func (h *Handler) addToRecentlyShown(sessionID, carID string) {
+	const maxRecentCars = 10 // Keep track of last 10 cars
+
+	if h.recentlyShown[sessionID] == nil {
+		h.recentlyShown[sessionID] = make([]string, 0, maxRecentCars)
+	}
+
+	// Add to front of list
+	h.recentlyShown[sessionID] = append([]string{carID}, h.recentlyShown[sessionID]...)
+
+	// Keep only last maxRecentCars
+	if len(h.recentlyShown[sessionID]) > maxRecentCars {
+		h.recentlyShown[sessionID] = h.recentlyShown[sessionID][:maxRecentCars]
+	}
+}
+
+// isRecentlyShown checks if a car was recently shown to this session
+func (h *Handler) isRecentlyShown(sessionID, carID string) bool {
+	recentCars := h.recentlyShown[sessionID]
+	for _, recentID := range recentCars {
+		if recentID == carID {
+			return true
+		}
+	}
+	return false
+}
+
+// selectRandomCarWithHistory selects a random car that hasn't been recently shown
+func (h *Handler) selectRandomCarWithHistory(sessionID string, allIDs []string) string {
+	const maxAttempts = 20 // Prevent infinite loops
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		randomID := allIDs[rand.Intn(len(allIDs))]
+		if !h.isRecentlyShown(sessionID, randomID) {
+			return randomID
+		}
+	}
+
+	// If we can't find a non-recent car after maxAttempts, just return any random car
+	// This ensures the game doesn't break if user plays longer than available cars
+	return allIDs[rand.Intn(len(allIDs))]
 }
 
 // isValidListingID validates listing ID format
