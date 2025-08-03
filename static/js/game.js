@@ -585,11 +585,30 @@ function nextRound() {
             // Load next challenge car
             loadChallengeAuto();
             updateChallengeProgress();
+            // Auto-scroll to car image after loading next car
+            scrollToCarImage();
         }
     } else {
         // Regular game modes
         loadNextCar();
+        // Auto-scroll to car image after loading next car
+        scrollToCarImage();
     }
+}
+
+// Auto-scroll to car image (especially useful on mobile)
+function scrollToCarImage() {
+    // Add a small delay to ensure the new car has loaded
+    setTimeout(() => {
+        const carImage = document.getElementById('mainCarImage');
+        if (carImage) {
+            carImage.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start',
+                inline: 'nearest'
+            });
+        }
+    }, 300);
 }
 
 // End game
