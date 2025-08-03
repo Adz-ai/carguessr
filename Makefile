@@ -14,7 +14,7 @@ build:
 build-prod:
 	@echo "🔨 Building optimized production binary..."
 	@mkdir -p bin
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/motors-guesser-linux-amd64 cmd/server/main.go
+	@CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/motors-guesser-linux-amd64 cmd/server/main.go
 	@echo "✅ Production binary created: bin/motors-guesser-linux-amd64"
 
 # Build and run production binary
