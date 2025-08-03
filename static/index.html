@@ -94,9 +94,30 @@
                 <span id="scoreLabel">Score: </span>
                 <span id="scoreValue">0</span>
             </div>
-            <button onclick="openLeaderboard()" class="leaderboard-button" title="View Leaderboard">
-                🏆 Leaderboard
-            </button>
+            <div class="nav-buttons">
+                <button onclick="openLeaderboard()" class="leaderboard-button" title="View Leaderboard">
+                    🏆 Leaderboard
+                </button>
+                <button onclick="openChallenges()" class="challenges-button" title="Friend Challenges" style="display: none;" id="challengesBtn">
+                    👥 Challenges
+                </button>
+                <div class="auth-section" id="authSection">
+                    <button onclick="showLoginModal()" class="auth-button" id="loginBtn">Login</button>
+                    <div class="user-menu" id="userMenu" style="display: none;">
+                        <button class="user-button" onclick="toggleUserDropdown()">
+                            <span id="userDisplayName">User</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="user-dropdown" id="userDropdown" style="display: none;">
+                            <a href="#" onclick="showProfile(); return false;">My Profile</a>
+                            <a href="#" onclick="showMyChallenges(); return false;">My Challenges</a>
+                            <a href="#" onclick="logout(); return false;">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Header -->
@@ -144,6 +165,31 @@
                     <h3>Stay at Zero</h3>
                     <p>Accumulate the lowest total difference</p>
                     <p class="mode-description">Guess car prices and try to keep your cumulative error as close to zero as possible! Play endlessly - the game continues forever!</p>
+                </div>
+            </div>
+            
+            <!-- Friend Challenge Section -->
+            <div class="friend-challenge-section" id="friendChallengeSection" style="display: none;">
+                <div class="challenge-divider">
+                    <span>OR</span>
+                </div>
+                <div class="challenge-options">
+                    <button class="challenge-action-btn create-btn" onclick="showCreateChallengeModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Create Friend Challenge
+                    </button>
+                    <button class="challenge-action-btn join-btn" onclick="showJoinChallengeModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                        Join with Code
+                    </button>
                 </div>
             </div>
         </div>
@@ -359,6 +405,199 @@
         </div>
     </footer>
 
-    <script src="/static/js/game.js?v=3.7"></script>
+    <!-- Authentication Modals -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal">
+            <button class="modal-close" onclick="closeModal('loginModal')">&times;</button>
+            <h2>Welcome Back!</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" name="username" required minlength="3" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" name="password" required minlength="6">
+                </div>
+                <button type="submit" class="auth-submit-btn">Login</button>
+            </form>
+            <p class="auth-switch">
+                Don't have an account? <a href="#" onclick="switchToRegister(); return false;">Sign up</a>
+            </p>
+        </div>
+    </div>
+    
+    <div id="registerModal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal">
+            <button class="modal-close" onclick="closeModal('registerModal')">&times;</button>
+            <h2>Create Account</h2>
+            <form id="registerForm" onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label for="registerUsername">Username</label>
+                    <input type="text" id="registerUsername" name="username" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_-]+">
+                    <small>Letters, numbers, underscores, and hyphens only</small>
+                </div>
+                <div class="form-group">
+                    <label for="registerDisplayName">Display Name</label>
+                    <input type="text" id="registerDisplayName" name="displayName" required minlength="1" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email (optional)</label>
+                    <input type="email" id="registerEmail" name="email">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" name="password" required minlength="6">
+                </div>
+                <button type="submit" class="auth-submit-btn">Create Account</button>
+            </form>
+            <p class="auth-switch">
+                Already have an account? <a href="#" onclick="switchToLogin(); return false;">Login</a>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Friend Challenge Modals -->
+    <div id="createChallengeModal" class="modal" style="display: none;">
+        <div class="modal-content challenge-modal">
+            <button class="modal-close" onclick="closeModal('createChallengeModal')">&times;</button>
+            <h2>Create Friend Challenge</h2>
+            <form id="createChallengeForm" onsubmit="handleCreateChallenge(event)">
+                <div class="form-group">
+                    <label for="challengeTitle">Challenge Title</label>
+                    <input type="text" id="challengeTitle" name="title" required minlength="1" maxlength="100" placeholder="Friday Night Challenge">
+                </div>
+                <div class="form-group">
+                    <label for="challengeDifficulty">Difficulty</label>
+                    <select id="challengeDifficulty" name="difficulty" required>
+                        <option value="easy">🟢 Easy Mode (Lookers Cars)</option>
+                        <option value="hard">🔴 Hard Mode (Bonhams Cars)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="maxParticipants">Max Participants</label>
+                    <input type="number" id="maxParticipants" name="maxParticipants" min="2" max="50" value="10" required>
+                </div>
+                <button type="submit" class="challenge-submit-btn">Create Challenge</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="joinChallengeModal" class="modal" style="display: none;">
+        <div class="modal-content challenge-modal">
+            <button class="modal-close" onclick="closeModal('joinChallengeModal')">&times;</button>
+            <h2>Join Friend Challenge</h2>
+            <form id="joinChallengeForm" onsubmit="handleJoinChallenge(event)">
+                <div class="form-group">
+                    <label for="challengeCode">Challenge Code</label>
+                    <input type="text" id="challengeCode" name="code" required pattern="[A-Za-z0-9]{6}" maxlength="6" placeholder="ABC123" style="text-transform: uppercase;">
+                    <small>Enter the 6-character code shared by your friend</small>
+                </div>
+                <button type="submit" class="challenge-submit-btn">Join Challenge</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="challengeCreatedModal" class="modal" style="display: none;">
+        <div class="modal-content challenge-modal">
+            <button class="modal-close" onclick="closeModal('challengeCreatedModal')">&times;</button>
+            <h2>Challenge Created! 🎉</h2>
+            <div class="challenge-code-display">
+                <p>Share this code with your friends:</p>
+                <div class="code-box">
+                    <span id="createdChallengeCode">ABC123</span>
+                    <button onclick="copyChallengCode()" class="copy-btn">📋 Copy</button>
+                </div>
+            </div>
+            <p class="challenge-info" id="challengeShareMessage"></p>
+            <button class="challenge-start-btn" onclick="startChallengeFromCode()">Start Challenge</button>
+        </div>
+    </div>
+    
+    <!-- Challenge Leaderboard Modal -->
+    <div id="challengeLeaderboardModal" class="modal" style="display: none;">
+        <div class="modal-content leaderboard-modal">
+            <button class="modal-close" onclick="closeModal('challengeLeaderboardModal')">&times;</button>
+            <h2 id="challengeLeaderboardTitle">Challenge Leaderboard</h2>
+            <div class="challenge-code-info">
+                <span>Code: </span><span id="challengeCodeDisplay" class="code-highlight"></span>
+            </div>
+            <div id="challengeParticipants" class="challenge-participants"></div>
+            <button class="refresh-btn" onclick="refreshChallengeLeaderboard()">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <!-- My Challenges Modal -->
+    <div id="myChallengesModal" class="modal" style="display: none;">
+        <div class="modal-content challenges-modal">
+            <button class="modal-close" onclick="closeModal('myChallengesModal')">&times;</button>
+            <h2>My Challenges</h2>
+            
+            <div class="challenges-tabs">
+                <button class="tab-button active" onclick="switchChallengeTab('created')">Created by Me</button>
+                <button class="tab-button" onclick="switchChallengeTab('participating')">I'm Participating</button>
+            </div>
+            
+            <div id="createdChallenges" class="challenge-list">
+                <div class="loading-state">Loading your challenges...</div>
+            </div>
+            
+            <div id="participatingChallenges" class="challenge-list" style="display: none;">
+                <div class="loading-state">Loading challenges you've joined...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal" style="display: none;">
+        <div class="modal-content profile-modal">
+            <button class="modal-close" onclick="closeModal('profileModal')">&times;</button>
+            <h2>My Profile</h2>
+            
+            <div class="profile-info">
+                <div class="profile-field">
+                    <label>Display Name:</label>
+                    <span id="profileDisplayName">-</span>
+                </div>
+                <div class="profile-field">
+                    <label>Username:</label>
+                    <span id="profileUsername">-</span>
+                </div>
+                <div class="profile-field">
+                    <label>Account Type:</label>
+                    <span id="profileAccountType">-</span>
+                </div>
+                <div class="profile-field">
+                    <label>Member Since:</label>
+                    <span id="profileMemberSince">-</span>
+                </div>
+            </div>
+            
+            <div class="profile-stats">
+                <h3>Game Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="totalGamesPlayed">0</span>
+                        <span class="stat-label">Games Played</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengesCreated">0</span>
+                        <span class="stat-label">Challenges Created</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="challengesJoined">0</span>
+                        <span class="stat-label">Challenges Joined</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="favoriteDifficulty">Easy</span>
+                        <span class="stat-label">Favorite Mode</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/game.js?v=4.0"></script>
+    <script src="/static/js/auth.js?v=1.1"></script>
 </body>
 </html>

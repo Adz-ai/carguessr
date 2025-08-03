@@ -46,7 +46,9 @@ import (
 	"golang.org/x/time/rate"
 
 	_ "autotraderguesser/docs"
+	"autotraderguesser/internal/database"
 	"autotraderguesser/internal/game"
+	"autotraderguesser/internal/handlers"
 	"autotraderguesser/internal/middleware"
 )
 
@@ -135,8 +137,19 @@ func main() {
 	r.StaticFile("/robots.txt", "./static/robots.txt")
 	r.StaticFile("/favicon.ico", "./static/favicon_io/favicon.ico")
 
-	// Initialize game handler
-	gameHandler := game.NewHandler()
+	// Initialize database
+	dbPath := "./data/carguessr.db"
+	db, err := database.NewDatabase(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.Close()
+	log.Println("✅ Database initialized successfully")
+
+	// Initialize handlers
+	gameHandler := game.NewHandler(db)
+	authHandler := handlers.NewAuthHandler(db)
+	friendsHandler := handlers.NewFriendsHandler(db, gameHandler)
 
 	// Swagger documentation (only in development mode)
 	if gin.Mode() != gin.ReleaseMode {
@@ -147,7 +160,15 @@ func main() {
 	// Public API routes with general rate limiting
 	api := r.Group("/api")
 	api.Use(middleware.RateLimitMiddleware(generalLimiter))
+	api.Use(authHandler.AuthMiddleware()) // Optional authentication - adds user context if authenticated
 	{
+		// Authentication endpoints
+		api.POST("/auth/register", authHandler.Register)
+		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/logout", authHandler.Logout)
+		api.GET("/auth/profile", authHandler.RequireAuth(), authHandler.GetProfile)
+		api.PUT("/auth/profile", authHandler.RequireAuth(), authHandler.UpdateProfile)
+
 		// Game endpoints
 		api.GET("/random-listing", gameHandler.GetRandomListing)
 		api.GET("/random-enhanced-listing", gameHandler.GetRandomEnhancedListing)
@@ -160,6 +181,14 @@ func main() {
 		api.POST("/challenge/start", gameHandler.StartChallenge)
 		api.GET("/challenge/:sessionId", gameHandler.GetChallengeSession)
 		api.POST("/challenge/:sessionId/guess", gameHandler.SubmitChallengeGuess)
+
+		// Friend Challenge routes (require authentication)
+		api.POST("/friends/challenges", friendsHandler.CreateFriendChallenge)
+		api.GET("/friends/challenges/:code", friendsHandler.GetFriendChallenge)
+		api.POST("/friends/challenges/:code/join", friendsHandler.JoinFriendChallenge)
+		api.GET("/friends/challenges/:code/leaderboard", friendsHandler.GetChallengeLeaderboard)
+		api.GET("/friends/challenges/:code/participation", friendsHandler.GetUserParticipation)
+		api.GET("/friends/challenges/my-challenges", friendsHandler.GetMyChallenges)
 
 		// Health check (no additional rate limiting)
 		api.GET("/health", func(c *gin.Context) {

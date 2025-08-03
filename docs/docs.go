@@ -825,6 +825,10 @@ const docTemplate = `{
                 "fuelType": {
                     "type": "string"
                 },
+                "fullTitle": {
+                    "description": "Complete original title for Easy mode",
+                    "type": "string"
+                },
                 "gearbox": {
                     "type": "string"
                 },
@@ -889,6 +893,10 @@ const docTemplate = `{
                 },
                 "steering": {
                     "description": "\"Right-hand drive\"",
+                    "type": "string"
+                },
+                "trim": {
+                    "description": "Enhanced Lookers fields",
                     "type": "string"
                 },
                 "year": {
@@ -1040,12 +1048,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "2.1",
+	Version:          "2.2",
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "CarGuessr API",
-	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.",
+	Description:      "A fun car price guessing game with multiple game modes using real car data from Bonhams Auction House (Hard mode) and Lookers dealership (Easy mode). Features Challenge Mode with GeoGuessr-style scoring, Streak Mode, and endless Stay at Zero mode. Includes comprehensive security, rate limiting, leaderboards, mobile auto-scroll, and session-based car history tracking to prevent repetition.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

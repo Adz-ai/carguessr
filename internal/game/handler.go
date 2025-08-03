@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"autotraderguesser/internal/cache"
+	"autotraderguesser/internal/database"
 	"autotraderguesser/internal/leaderboard"
 	"autotraderguesser/internal/models"
 	"autotraderguesser/internal/scraper"
@@ -26,10 +27,11 @@ import (
 const ListingAmount int = 250
 
 type Handler struct {
+	db                   *database.Database                  // Database connection
 	scraper              *scraper.Scraper
 	bonhamsListings      map[string]*models.BonhamsCar // Hard mode data
 	lookersListings      map[string]*models.LookersCar // Easy mode data
-	leaderboard          []models.LeaderboardEntry
+	leaderboard          []models.LeaderboardEntry     // Legacy in-memory cache (will phase out)
 	mu                   sync.RWMutex
 	zeroScores           map[string]float64
 	streakScores         map[string]int
@@ -39,8 +41,9 @@ type Handler struct {
 	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
 }
 
-func NewHandler() *Handler {
+func NewHandler(db *database.Database) *Handler {
 	h := &Handler{
+		db:                db,
 		scraper:           scraper.New(),
 		bonhamsListings:   make(map[string]*models.BonhamsCar),
 		lookersListings:   make(map[string]*models.LookersCar),
@@ -332,9 +335,6 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 // @Success 200 {array} models.LeaderboardEntry
 // @Router /api/leaderboard [get]
 func (h *Handler) GetLeaderboard(c *gin.Context) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
 	gameMode := c.Query("mode")
 	difficulty := c.Query("difficulty")
 	limit := 10 // Default limit
@@ -346,37 +346,48 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 		}
 	}
 
-	// Filter leaderboard by game mode and difficulty if specified
-	filtered := make([]models.LeaderboardEntry, 0)
-	for _, entry := range h.leaderboard {
-		// Filter by game mode
-		if gameMode != "" && entry.GameMode != gameMode {
-			continue
+	// Get leaderboard from database
+	entries, err := h.db.GetLeaderboard(gameMode, difficulty, limit)
+	if err != nil {
+		log.Printf("Failed to get leaderboard from database: %v", err)
+		// Fallback to in-memory leaderboard
+		h.mu.RLock()
+		defer h.mu.RUnlock()
+		
+		filtered := make([]models.LeaderboardEntry, 0)
+		for _, entry := range h.leaderboard {
+			// Filter by game mode
+			if gameMode != "" && entry.GameMode != gameMode {
+				continue
+			}
+
+			// Filter by difficulty (default to "hard" for backward compatibility)
+			entryDifficulty := entry.Difficulty
+			if entryDifficulty == "" {
+				entryDifficulty = "hard" // Default for legacy entries
+			}
+			if difficulty != "" && entryDifficulty != difficulty {
+				continue
+			}
+
+			filtered = append(filtered, entry)
 		}
 
-		// Filter by difficulty (default to "hard" for backward compatibility)
-		entryDifficulty := entry.Difficulty
-		if entryDifficulty == "" {
-			entryDifficulty = "hard" // Default for legacy entries
-		}
-		if difficulty != "" && entryDifficulty != difficulty {
-			continue
+		// Sort by score - challenge mode: highest first, streak mode: highest first
+		sort.Slice(filtered, func(i, j int) bool {
+			return filtered[i].Score > filtered[j].Score
+		})
+
+		// Apply limit
+		if len(filtered) > limit {
+			filtered = filtered[:limit]
 		}
 
-		filtered = append(filtered, entry)
+		c.JSON(http.StatusOK, filtered)
+		return
 	}
 
-	// Sort by score - challenge mode: highest first, streak mode: highest first
-	sort.Slice(filtered, func(i, j int) bool {
-		return filtered[i].Score > filtered[j].Score
-	})
-
-	// Apply limit
-	if len(filtered) > limit {
-		filtered = filtered[:limit]
-	}
-
-	c.JSON(http.StatusOK, filtered)
+	c.JSON(http.StatusOK, entries)
 }
 
 // SubmitScore godoc
@@ -435,48 +446,58 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 		difficulty = "hard" // Default to hard for backward compatibility
 	}
 
+	// Get user context if available
+	var userID *int
+	if user, exists := c.Get("user"); exists {
+		if u, ok := user.(*models.User); ok {
+			userID = &u.ID
+		}
+	}
+
 	entry := models.LeaderboardEntry{
+		UserID:     userID,
 		Name:       req.Name,
 		Score:      req.Score,
 		GameMode:   req.GameMode,
 		Difficulty: difficulty,
-		Date:       time.Now().Format("2006-01-02 15:04:05"),
-		ID:         generateSessionID(),
+		SessionID:  req.SessionID,
 	}
 
-	// Add to leaderboard
-	h.leaderboard = append(h.leaderboard, entry)
+	// Save to database
+	if err := h.db.AddLeaderboardEntry(&entry); err != nil {
+		log.Printf("Failed to save leaderboard entry to database: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save score"})
+		return
+	}
 
-	// Sort leaderboard by game mode, difficulty, then score (highest first)
+	// Also add to legacy in-memory leaderboard for backward compatibility during transition
+	entry.Date = time.Now().Format("2006-01-02 15:04:05")
+	h.leaderboard = append(h.leaderboard, entry)
+	
+	// Sort legacy leaderboard
 	sort.Slice(h.leaderboard, func(i, j int) bool {
-		// First sort by game mode
 		if h.leaderboard[i].GameMode != h.leaderboard[j].GameMode {
 			return h.leaderboard[i].GameMode < h.leaderboard[j].GameMode
 		}
-		// Then sort by difficulty (easy < hard)
 		difficultyI := h.leaderboard[i].Difficulty
 		if difficultyI == "" {
-			difficultyI = "hard" // Default for legacy entries
+			difficultyI = "hard"
 		}
 		difficultyJ := h.leaderboard[j].Difficulty
 		if difficultyJ == "" {
-			difficultyJ = "hard" // Default for legacy entries
+			difficultyJ = "hard"
 		}
 		if difficultyI != difficultyJ {
 			return difficultyI < difficultyJ
 		}
-		// Finally sort by score (highest first)
 		return h.leaderboard[i].Score > h.leaderboard[j].Score
 	})
 
-	// Keep only top 100 entries per game mode to prevent memory issues
 	h.trimLeaderboard()
+	h.saveLeaderboard() // Keep saving to JSON for now
 
-	// Save to persistent storage
-	h.saveLeaderboard()
-
-	// Find position in leaderboard
-	position := h.findLeaderboardPosition(entry)
+	// Find position in leaderboard using database query
+	position := h.findLeaderboardPositionFromDB(entry)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Score submitted successfully!",
@@ -1098,6 +1119,7 @@ func (h *Handler) StartChallenge(c *gin.Context) {
 	sessionID := generateSessionID()
 	session := &models.ChallengeSession{
 		SessionID:  sessionID,
+		Difficulty: difficulty, // Add the missing difficulty field
 		Cars:       selectedCars,
 		CurrentCar: 0,
 		Guesses:    make([]models.ChallengeGuess, 0),
@@ -1106,6 +1128,23 @@ func (h *Handler) StartChallenge(c *gin.Context) {
 		StartTime:  time.Now().Format(time.RFC3339),
 	}
 
+	// Get user context if available
+	var userID int
+	if user, exists := c.Get("user"); exists {
+		if u, ok := user.(*models.User); ok {
+			userID = u.ID
+			session.UserID = userID
+		}
+	}
+
+	// Save to database
+	if err := h.db.CreateChallengeSession(session); err != nil {
+		log.Printf("Failed to save challenge session to database: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create challenge session"})
+		return
+	}
+
+	// Also store in memory for backward compatibility during transition
 	h.mu.Lock()
 	h.challengeSessions[sessionID] = session
 	h.mu.Unlock()
@@ -1131,11 +1170,23 @@ func (h *Handler) GetChallengeSession(c *gin.Context) {
 		return
 	}
 
-	h.mu.RLock()
-	session, exists := h.challengeSessions[sessionID]
-	h.mu.RUnlock()
+	// Try to get session from database first
+	session, err := h.db.GetChallengeSession(sessionID)
+	if err != nil {
+		log.Printf("Failed to get challenge session from database: %v", err)
+		// Fallback to in-memory storage
+		h.mu.RLock()
+		sessionMem, exists := h.challengeSessions[sessionID]
+		h.mu.RUnlock()
 
-	if !exists {
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
+			return
+		}
+		session = sessionMem
+	}
+
+	if session == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
 		return
 	}
@@ -1177,13 +1228,28 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock()
-	session, exists := h.challengeSessions[sessionID]
-	if !exists {
+	// Get session from database first
+	session, err := h.db.GetChallengeSession(sessionID)
+	if err != nil {
+		log.Printf("Failed to get challenge session from database: %v", err)
+		// Fallback to in-memory storage
+		h.mu.Lock()
+		sessionMem, exists := h.challengeSessions[sessionID]
+		if !exists {
+			h.mu.Unlock()
+			c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
+			return
+		}
+		session = sessionMem
 		h.mu.Unlock()
+	}
+
+	if session == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Challenge session not found"})
 		return
 	}
+
+	h.mu.Lock() // Lock for updates
 
 	if session.IsComplete {
 		h.mu.Unlock()
@@ -1262,6 +1328,19 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		session.CompletedTime = time.Now().Format(time.RFC3339)
 	}
 
+	// Save guess to database
+	if err := h.db.AddChallengeGuess(sessionID, &guess); err != nil {
+		log.Printf("Failed to save challenge guess to database: %v", err)
+	}
+
+	// Update session in database
+	if err := h.db.UpdateChallengeSession(session); err != nil {
+		log.Printf("Failed to update challenge session in database: %v", err)
+	}
+
+	// Also update in-memory storage for backward compatibility
+	h.challengeSessions[sessionID] = session
+
 	h.mu.Unlock()
 
 	// Create response
@@ -1304,6 +1383,83 @@ func (h *Handler) calculateChallengePoints(percentage float64) int {
 
 	// Round to nearest integer
 	return int(math.Round(points))
+}
+
+// CreateTemplateChallenge creates a challenge session template for friend challenges
+func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*models.ChallengeSession, error) {
+	h.mu.RLock()
+	var selectedCars []*models.EnhancedCar
+	
+	if difficulty == "easy" {
+		// Easy mode - use Lookers listings
+		if len(h.lookersListings) < 10 {
+			h.mu.RUnlock()
+			return nil, fmt.Errorf("not enough easy mode cars available")
+		}
+		
+		var allCars []*models.LookersCar
+		for _, car := range h.lookersListings {
+			allCars = append(allCars, car)
+		}
+		h.mu.RUnlock()
+		
+		// Shuffle and select 10
+		rand.Shuffle(len(allCars), func(i, j int) {
+			allCars[i], allCars[j] = allCars[j], allCars[i]
+		})
+		
+		selectedCars = make([]*models.EnhancedCar, 10)
+		for i := 0; i < 10; i++ {
+			enhancedCar := allCars[i].ToEnhancedCar()
+			enhancedCar.Price = 0 // Hide price for guessing
+			selectedCars[i] = enhancedCar
+		}
+	} else {
+		// Hard mode - use Bonhams listings  
+		if len(h.bonhamsListings) < 10 {
+			h.mu.RUnlock()
+			return nil, fmt.Errorf("not enough hard mode cars available")
+		}
+		
+		var allCars []*models.BonhamsCar
+		for _, car := range h.bonhamsListings {
+			allCars = append(allCars, car)
+		}
+		h.mu.RUnlock()
+		
+		// Shuffle and select 10
+		rand.Shuffle(len(allCars), func(i, j int) {
+			allCars[i], allCars[j] = allCars[j], allCars[i]
+		})
+		
+		selectedCars = make([]*models.EnhancedCar, 10)
+		for i := 0; i < 10; i++ {
+			enhancedCar := allCars[i].ToEnhancedCar()
+			enhancedCar.Price = 0 // Hide price for guessing
+			selectedCars[i] = enhancedCar
+		}
+	}
+	
+	sessionID := generateSessionID()
+	
+	session := &models.ChallengeSession{
+		SessionID:  sessionID,
+		UserID:     userID,
+		Difficulty: difficulty,
+		Cars:       selectedCars,
+		CurrentCar: 0,
+		Guesses:    []models.ChallengeGuess{},
+		TotalScore: 0,
+		IsComplete: false,
+		StartTime:  time.Now().Format(time.RFC3339),
+	}
+	
+	// Save the template session to database
+	if err := h.db.CreateChallengeSession(session); err != nil {
+		return nil, fmt.Errorf("failed to create template session: %w", err)
+	}
+	
+	return session, nil
 }
 
 func generateSessionID() string {
@@ -1439,6 +1595,25 @@ func (h *Handler) findLeaderboardPosition(entry models.LeaderboardEntry) int {
 		}
 	}
 	return -1
+}
+
+func (h *Handler) findLeaderboardPositionFromDB(entry models.LeaderboardEntry) int {
+	// Get all entries for the same game mode and difficulty, ordered by score
+	allEntries, err := h.db.GetLeaderboard(entry.GameMode, entry.Difficulty, 0) // 0 = no limit
+	if err != nil {
+		log.Printf("Failed to get leaderboard for position calculation: %v", err)
+		return -1
+	}
+	
+	// Find position of the entry (entries are already sorted by score in descending order)
+	for i, e := range allEntries {
+		if e.Score <= entry.Score {
+			return i + 1
+		}
+	}
+	
+	// If entry score is lower than all existing entries
+	return len(allEntries) + 1
 }
 
 // initializeLeaderboard loads leaderboard from persistent storage

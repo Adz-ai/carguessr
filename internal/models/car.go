@@ -277,24 +277,27 @@ type GuessResponse struct {
 
 // ChallengeSession represents a 10-car challenge game session
 type ChallengeSession struct {
-	SessionID     string           `json:"sessionId"`
-	Cars          []*EnhancedCar   `json:"cars"`
-	CurrentCar    int              `json:"currentCar"`
-	Guesses       []ChallengeGuess `json:"guesses"`
-	TotalScore    int              `json:"totalScore"`
-	IsComplete    bool             `json:"isComplete"`
-	StartTime     string           `json:"startTime"`
-	CompletedTime string           `json:"completedTime,omitempty"`
+	SessionID     string           `json:"sessionId" db:"session_id"`
+	UserID        int              `json:"userId,omitempty" db:"user_id"`
+	Difficulty    string           `json:"difficulty" db:"difficulty"`
+	Cars          []*EnhancedCar   `json:"cars" db:"-"`
+	CurrentCar    int              `json:"currentCar" db:"current_car"`
+	Guesses       []ChallengeGuess `json:"guesses" db:"-"`
+	TotalScore    int              `json:"totalScore" db:"total_score"`
+	IsComplete    bool             `json:"isComplete" db:"is_complete"`
+	StartTime     string           `json:"startTime" db:"created_at"`
+	CompletedTime string           `json:"completedTime,omitempty" db:"completed_at"`
 }
 
 // ChallengeGuess represents a single guess in challenge mode
 type ChallengeGuess struct {
-	CarID        string  `json:"carId"`
-	GuessedPrice float64 `json:"guessedPrice"`
-	ActualPrice  float64 `json:"actualPrice"`
-	Difference   float64 `json:"difference"`
-	Percentage   float64 `json:"percentage"`
-	Points       int     `json:"points"`
+	CarIndex     int     `json:"carIndex,omitempty" db:"car_index"`
+	CarID        string  `json:"carId" db:"car_id"`
+	GuessedPrice float64 `json:"guessedPrice" db:"guessed_price"`
+	ActualPrice  float64 `json:"actualPrice" db:"actual_price"`
+	Difference   float64 `json:"difference" db:"-"` // Calculated field
+	Percentage   float64 `json:"percentage" db:"accuracy_percentage"`
+	Points       int     `json:"points" db:"points"`
 }
 
 // ChallengeResponse represents the response after submitting a challenge guess
@@ -310,12 +313,16 @@ type ChallengeResponse struct {
 
 // LeaderboardEntry represents a high score entry
 type LeaderboardEntry struct {
-	Name       string `json:"name" binding:"required,min=1,max=20"`
-	Score      int    `json:"score"`
-	GameMode   string `json:"gameMode"`
-	Difficulty string `json:"difficulty,omitempty"` // "easy" or "hard", defaults to "hard" for backward compatibility
-	Date       string `json:"date"`
-	ID         string `json:"id,omitempty"`
+	ID                  int    `json:"id,omitempty" db:"id"`
+	UserID              *int   `json:"userId,omitempty" db:"user_id"`
+	Name                string `json:"name" binding:"required,min=1,max=20" db:"username"`
+	Score               int    `json:"score" db:"score"`
+	GameMode            string `json:"gameMode" db:"game_mode"`
+	Difficulty          string `json:"difficulty,omitempty" db:"difficulty"` // "easy" or "hard", defaults to "hard" for backward compatibility
+	Date                string `json:"date" db:"-"` // Formatted date for JSON response
+	SessionID           string `json:"sessionId,omitempty" db:"session_id"`
+	FriendChallengeID   *int   `json:"friendChallengeId,omitempty" db:"friend_challenge_id"`
+	LegacyID            string `json:"legacyId,omitempty" db:"legacy_id"` // For migration from JSON
 }
 
 // LeaderboardSubmissionRequest represents a request to submit a score to the leaderboard

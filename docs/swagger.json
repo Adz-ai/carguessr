@@ -5,18 +5,18 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.",
+        "description": "A fun car price guessing game with multiple game modes using real car data from Bonhams Auction House (Hard mode) and Lookers dealership (Easy mode). Features Challenge Mode with GeoGuessr-style scoring, Streak Mode, and endless Stay at Zero mode. Includes comprehensive security, rate limiting, leaderboards, mobile auto-scroll, and session-based car history tracking to prevent repetition.",
         "title": "CarGuessr API",
         "termsOfService": "https://carguessr.uk",
         "contact": {
             "name": "CarGuessr Support",
-            "url": "https://github.com/your-repo/carguessr/issues"
+            "url": "https://github.com/Adz-ai/carguessr/issues"
         },
         "license": {
             "name": "MIT",
             "url": "https://opensource.org/licenses/MIT"
         },
-        "version": "2.1"
+        "version": "2.2"
     },
     "host": "localhost:8080",
     "basePath": "/",
@@ -823,6 +823,10 @@
                 "fuelType": {
                     "type": "string"
                 },
+                "fullTitle": {
+                    "description": "Complete original title for Easy mode",
+                    "type": "string"
+                },
                 "gearbox": {
                     "type": "string"
                 },
@@ -887,6 +891,10 @@
                 },
                 "steering": {
                     "description": "\"Right-hand drive\"",
+                    "type": "string"
+                },
+                "trim": {
+                    "description": "Enhanced Lookers fields",
                     "type": "string"
                 },
                 "year": {
