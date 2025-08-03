@@ -1193,9 +1193,15 @@ async function autoSubmitForLoggedInUser(playerName) {
         currentGame.leaderboardShownAfterSubmission = true;
         console.log('Setting leaderboardShownAfterSubmission to true for auto-submit');
         
-        // Show leaderboard with the appropriate game mode
+        // Show leaderboard modal with the appropriate game mode
         const gameMode = currentGame.pendingLeaderboardData.gameMode;
-        console.log('Showing leaderboard with game mode:', gameMode);
+        console.log('Showing leaderboard modal with game mode:', gameMode);
+        
+        // Show the modal first
+        document.getElementById('leaderboardModal').style.display = 'flex';
+        // Lock body scroll
+        lockBodyScroll();
+        // Then populate with content
         showLeaderboard(gameMode);
         
     } catch (error) {
