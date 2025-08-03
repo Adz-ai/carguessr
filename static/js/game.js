@@ -640,7 +640,12 @@ function endGame() {
 // Close modals when clicking outside
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
-        event.target.style.display = 'none';
+        // Special handling for leaderboard modal to ensure proper redirect
+        if (event.target.id === 'leaderboardModal') {
+            closeLeaderboard();
+        } else {
+            event.target.style.display = 'none';
+        }
     }
 }
 
