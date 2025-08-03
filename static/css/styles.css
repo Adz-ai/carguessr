@@ -914,8 +914,10 @@ header h1 {
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     z-index: 1000;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    overflow-y: auto;
+    padding: 20px 0;
 }
 
 .modal-content {
@@ -928,6 +930,8 @@ header h1 {
     animation: modalSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    margin: 20px auto;
+    position: relative;
 }
 
 @keyframes modalSlide {
@@ -1117,6 +1121,43 @@ header h1 {
         font-size: 0.65rem;
         padding: 3px 10px;
         margin-bottom: 8px;
+    }
+    
+    /* Modal fixes for mobile */
+    .modal {
+        padding: 10px 0;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 30px 20px;
+        margin: 10px auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    .leaderboard-content {
+        width: 100%;
+        max-width: none;
+    }
+    
+    .modal-content h2 {
+        font-size: 1.8rem;
+        margin-bottom: 20px;
+    }
+    
+    .leaderboard-content-area {
+        max-height: 50vh;
+    }
+    
+    .close-button {
+        position: sticky;
+        bottom: 0;
+        width: 100%;
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 59, 48, 0.9);
+        border-radius: 15px;
     }
     
     .price-input {

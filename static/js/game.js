@@ -553,8 +553,10 @@ function displayResult(result) {
             submitButton.style.display = '';
         }
         
+        lockBodyScroll();
         document.getElementById('gameOverModal').style.display = 'flex';
     } else {
+        lockBodyScroll();
         document.getElementById('resultModal').style.display = 'flex';
     }
 }
@@ -562,6 +564,7 @@ function displayResult(result) {
 // Next round
 function nextRound() {
     document.getElementById('resultModal').style.display = 'none';
+    unlockBodyScroll();
     
     if (currentGame.mode === 'challenge') {
         if (currentGame.challengeSession.currentCar >= currentGame.challengeSession.cars.length) {
@@ -883,7 +886,7 @@ function showNameInputModal(gameMode) {
     document.getElementById('challengeCompleteModal').style.display = 'none';
     document.getElementById('gameOverModal').style.display = 'none';
     
-    // Show name input modal
+    // Show name input modal (keep body locked since we're showing another modal)
     document.getElementById('nameInputModal').style.display = 'flex';
     
     // Focus on the name input
@@ -962,6 +965,20 @@ function skipLeaderboard() {
     location.reload();
 }
 
+// Helper function to lock body scroll
+function lockBodyScroll() {
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+}
+
+// Helper function to unlock body scroll
+function unlockBodyScroll() {
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.width = '';
+}
+
 // Open leaderboard modal
 function openLeaderboard() {
     // Reset flag since this is manual access, not after score submission
@@ -970,6 +987,9 @@ function openLeaderboard() {
     // Use current difficulty preference
     leaderboardState.currentDifficulty = currentGame.difficulty;
     
+    // Prevent body scroll on mobile
+    lockBodyScroll();
+    
     document.getElementById('leaderboardModal').style.display = 'flex';
     showLeaderboard('challenge'); // Default to challenge mode
 }
@@ -977,6 +997,9 @@ function openLeaderboard() {
 // Close leaderboard modal
 function closeLeaderboard() {
     document.getElementById('leaderboardModal').style.display = 'none';
+    
+    // Restore body scroll
+    unlockBodyScroll();
     
     // If leaderboard was shown after score submission, reload page to go back to homepage
     if (currentGame.leaderboardShownAfterSubmission) {
