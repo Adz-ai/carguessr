@@ -616,8 +616,22 @@ async function resumeChallenge(code) {
 // User statistics loading
 async function loadUserStats() {
     try {
-        // For now, we'll show basic stats from the user object
-        // In the future, you could add a dedicated stats endpoint
+        // Fetch fresh profile data to ensure leaderboard stats are up-to-date
+        const token = localStorage.getItem('sessionToken');
+        const profileResponse = await fetch('/api/auth/profile', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            // Update currentUser with fresh data
+            currentUser = profileData.user;
+            currentUser.leaderboardStats = profileData.leaderboardStats;
+        }
+        
+        // Display basic stats from the user object
         document.getElementById('totalGamesPlayed').textContent = currentUser.totalGamesPlayed || 0;
         // Display favorite difficulty with proper capitalization
         const favDifficulty = currentUser.favoriteDifficulty;
@@ -636,8 +650,7 @@ async function loadUserStats() {
         document.getElementById('challengeHardRegisteredRank').textContent = leaderboardStats.challenge_hard_registered_rank || 'N/A';
         document.getElementById('challengeHardOverallRank').textContent = leaderboardStats.challenge_hard_overall_rank || 'N/A';
         
-        // These would come from the challenges data
-        const token = localStorage.getItem('sessionToken');
+        // Fetch challenges data
         const response = await fetch('/api/friends/challenges/my-challenges', {
             headers: {
                 'Authorization': `Bearer ${token}`
