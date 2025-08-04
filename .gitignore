@@ -67,4 +67,10 @@ backup_*/
 /main
 /server
 
+# Database files - NEVER commit these!
+*.db
+*.db-shm
+*.db-wal
+data/carguessr.db*
+
 # Note: Cache files (bonhams_cache.json, lookers_cache.json) are now tracked in git under data/ folder
