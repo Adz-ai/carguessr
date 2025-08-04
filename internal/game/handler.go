@@ -480,8 +480,15 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 		return
 	}
 
-	// Update user's favorite difficulty based on gameplay patterns (for logged-in users)
+	// Update user's favorite difficulty and increment games played (for logged-in users)
 	if userID != nil {
+		// Increment total games played
+		if err := h.db.IncrementUserGamesPlayed(*userID); err != nil {
+			log.Printf("Failed to increment user's games played count: %v", err)
+			// Don't fail the request for this non-critical operation
+		}
+
+		// Update favorite difficulty based on gameplay patterns
 		if err := h.db.UpdateUserFavoriteDifficulty(*userID); err != nil {
 			log.Printf("Failed to update user's favorite difficulty: %v", err)
 			// Don't fail the request for this non-critical operation

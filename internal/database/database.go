@@ -360,6 +360,23 @@ func (d *Database) UpdateAllUsersFavoriteDifficulty() error {
 	return nil
 }
 
+// IncrementUserGamesPlayed increments the total_games_played counter for a user
+func (d *Database) IncrementUserGamesPlayed(userID int) error {
+	query := `
+		UPDATE users 
+		SET total_games_played = total_games_played + 1, 
+		    last_active = datetime('now')
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to increment games played: %w", err)
+	}
+
+	return nil
+}
+
 // Challenge session methods
 
 // CreateChallengeSession creates a new challenge session
