@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,7 +18,6 @@ import (
 
 	"autotraderguesser/internal/cache"
 	"autotraderguesser/internal/database"
-	"autotraderguesser/internal/leaderboard"
 	"autotraderguesser/internal/models"
 	"autotraderguesser/internal/scraper"
 	"autotraderguesser/internal/validation"
@@ -32,7 +30,6 @@ type Handler struct {
 	scraper              *scraper.Scraper
 	bonhamsListings      map[string]*models.BonhamsCar // Hard mode data
 	lookersListings      map[string]*models.LookersCar // Easy mode data
-	leaderboard          []models.LeaderboardEntry     // Legacy in-memory cache (will phase out)
 	mu                   sync.RWMutex
 	zeroScores           map[string]float64
 	streakScores         map[string]int
@@ -48,7 +45,6 @@ func NewHandler(db *database.Database) *Handler {
 		scraper:           scraper.New(),
 		bonhamsListings:   make(map[string]*models.BonhamsCar),
 		lookersListings:   make(map[string]*models.LookersCar),
-		leaderboard:       make([]models.LeaderboardEntry, 0),
 		zeroScores:        make(map[string]float64),
 		streakScores:      make(map[string]int),
 		challengeSessions: make(map[string]*models.ChallengeSession),
@@ -65,9 +61,6 @@ func NewHandler(db *database.Database) *Handler {
 	// Verify both data sources are ready
 	h.verifyDataSourcesReady()
 	fmt.Println("✅ All game modes ready for play!")
-
-	// Load leaderboard from persistent storage
-	h.initializeLeaderboard()
 
 	// Start automatic refresh timers
 	h.startAutoRefresh()
@@ -360,40 +353,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	entries, err := h.db.GetLeaderboard(gameMode, difficulty, limit)
 	if err != nil {
 		log.Printf("Failed to get leaderboard from database: %v", err)
-		// Fallback to in-memory leaderboard
-		h.mu.RLock()
-		defer h.mu.RUnlock()
-
-		filtered := make([]models.LeaderboardEntry, 0)
-		for _, entry := range h.leaderboard {
-			// Filter by game mode
-			if gameMode != "" && entry.GameMode != gameMode {
-				continue
-			}
-
-			// Filter by difficulty (default to "hard" for backward compatibility)
-			entryDifficulty := entry.Difficulty
-			if entryDifficulty == "" {
-				entryDifficulty = "hard" // Default for legacy entries
-			}
-			if difficulty != "" && entryDifficulty != difficulty {
-				continue
-			}
-
-			filtered = append(filtered, entry)
-		}
-
-		// Sort by score - challenge mode: highest first, streak mode: highest first
-		sort.Slice(filtered, func(i, j int) bool {
-			return filtered[i].Score > filtered[j].Score
-		})
-
-		// Apply limit
-		if len(filtered) > limit {
-			filtered = filtered[:limit]
-		}
-
-		c.JSON(http.StatusOK, filtered)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
 		return
 	}
 
@@ -494,32 +454,6 @@ func (h *Handler) SubmitScore(c *gin.Context) {
 			// Don't fail the request for this non-critical operation
 		}
 	}
-
-	// Also add to legacy in-memory leaderboard for backward compatibility during transition
-	entry.Date = time.Now().Format("2006-01-02 15:04:05")
-	h.leaderboard = append(h.leaderboard, entry)
-
-	// Sort legacy leaderboard
-	sort.Slice(h.leaderboard, func(i, j int) bool {
-		if h.leaderboard[i].GameMode != h.leaderboard[j].GameMode {
-			return h.leaderboard[i].GameMode < h.leaderboard[j].GameMode
-		}
-		difficultyI := h.leaderboard[i].Difficulty
-		if difficultyI == "" {
-			difficultyI = "hard"
-		}
-		difficultyJ := h.leaderboard[j].Difficulty
-		if difficultyJ == "" {
-			difficultyJ = "hard"
-		}
-		if difficultyI != difficultyJ {
-			return difficultyI < difficultyJ
-		}
-		return h.leaderboard[i].Score > h.leaderboard[j].Score
-	})
-
-	h.trimLeaderboard()
-	h.saveLeaderboard() // Keep saving to JSON for now
 
 	// Find position in leaderboard using database query
 	position := h.findLeaderboardPositionFromDB(entry)
@@ -1579,47 +1513,6 @@ func parseInt(s string) int {
 }
 
 // trimLeaderboard keeps only top entries per game mode and difficulty combination
-func (h *Handler) trimLeaderboard() {
-	if len(h.leaderboard) <= 200 { // Increased limit since we have 2 difficulties now
-		return
-	}
-
-	// Group by game mode + difficulty combination
-	modeGroups := make(map[string][]models.LeaderboardEntry)
-	for _, entry := range h.leaderboard {
-		difficulty := entry.Difficulty
-		if difficulty == "" {
-			difficulty = "hard" // Default for legacy entries
-		}
-		key := entry.GameMode + "_" + difficulty
-		modeGroups[key] = append(modeGroups[key], entry)
-	}
-
-	// Keep top 25 per mode+difficulty combination
-	h.leaderboard = make([]models.LeaderboardEntry, 0)
-	for _, entries := range modeGroups {
-		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].Score > entries[j].Score
-		})
-
-		limit := 25 // 25 per combination = up to 100 total (2 game modes × 2 difficulties × 25)
-		if len(entries) < limit {
-			limit = len(entries)
-		}
-
-		h.leaderboard = append(h.leaderboard, entries[:limit]...)
-	}
-}
-
-// findLeaderboardPosition finds the position of an entry in the sorted leaderboard
-func (h *Handler) findLeaderboardPosition(entry models.LeaderboardEntry) int {
-	for i, e := range h.leaderboard {
-		if e.ID == entry.ID {
-			return i + 1
-		}
-	}
-	return -1
-}
 
 func (h *Handler) findLeaderboardPositionFromDB(entry models.LeaderboardEntry) int {
 	// Get all entries for the same game mode and difficulty, ordered by score
@@ -1640,30 +1533,6 @@ func (h *Handler) findLeaderboardPositionFromDB(entry models.LeaderboardEntry) i
 	return len(allEntries) + 1
 }
 
-// initializeLeaderboard loads leaderboard from persistent storage
-func (h *Handler) initializeLeaderboard() {
-	if entries, err := leaderboard.LoadFromFile(); err == nil {
-		h.leaderboard = entries
-		fmt.Printf("📊 Loaded %d leaderboard entries from file\n", len(entries))
-
-		if leaderboard.FileExists() {
-			if age, err := leaderboard.GetFileAge(); err == nil {
-				fmt.Printf("📊 Leaderboard file age: %s\n", age.Round(time.Minute))
-			}
-		}
-	} else {
-		fmt.Printf("📊 No existing leaderboard found, starting fresh: %v\n", err)
-		h.leaderboard = make([]models.LeaderboardEntry, 0)
-	}
-}
-
-// saveLeaderboard saves leaderboard to persistent storage
-func (h *Handler) saveLeaderboard() {
-	if err := leaderboard.SaveToFile(h.leaderboard); err != nil {
-		fmt.Printf("⚠️ Failed to save leaderboard: %v\n", err)
-	}
-}
-
 // GetLeaderboardStatus godoc
 // @Summary Get leaderboard status information (Admin Only)
 // @Description Returns information about the leaderboard file, entry counts, and storage details. Requires admin authentication.
@@ -1675,40 +1544,36 @@ func (h *Handler) saveLeaderboard() {
 // @Failure 429 {object} map[string]string "error: Too Many Requests - Rate limited"
 // @Router /api/admin/leaderboard-status [get]
 func (h *Handler) GetLeaderboardStatus(c *gin.Context) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	// Count entries by game mode and difficulty
+	// Get counts from database for each mode and difficulty combination
 	counts := make(map[string]int)
-	for _, entry := range h.leaderboard {
-		difficulty := entry.Difficulty
-		if difficulty == "" {
-			difficulty = "hard" // Default for legacy entries
+	totalEntries := 0
+
+	modes := []string{"challenge", "streak", "zero"}
+	difficulties := []string{"easy", "hard"}
+
+	for _, mode := range modes {
+		for _, difficulty := range difficulties {
+			entries, err := h.db.GetLeaderboard(mode, difficulty, 0) // 0 = no limit
+			if err == nil {
+				key := mode + "_" + difficulty
+				counts[key] = len(entries)
+				totalEntries += len(entries)
+			}
 		}
-		key := entry.GameMode + "_" + difficulty
-		counts[key]++
 	}
 
 	status := gin.H{
-		"total_entries": len(h.leaderboard),
+		"total_entries": totalEntries,
 		"breakdown": gin.H{
 			"challenge_easy": counts["challenge_easy"],
 			"challenge_hard": counts["challenge_hard"],
 			"streak_easy":    counts["streak_easy"],
 			"streak_hard":    counts["streak_hard"],
+			"zero_easy":      counts["zero_easy"],
+			"zero_hard":      counts["zero_hard"],
 		},
-		"file_exists": leaderboard.FileExists(),
-	}
-
-	if leaderboard.FileExists() {
-		if age, err := leaderboard.GetFileAge(); err == nil {
-			status["file_age"] = age.Round(time.Minute).String()
-			status["file_age_hours"] = age.Hours()
-		}
-
-		if path, err := leaderboard.GetAbsolutePath(); err == nil {
-			status["file_path"] = path
-		}
+		"storage":       "database",
+		"database_path": "./data/carguessr.db",
 	}
 
 	c.JSON(http.StatusOK, status)
