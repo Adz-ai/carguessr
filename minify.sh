@@ -1,30 +1,17 @@
 #!/bin/bash
 
 # Create minified directory if it doesn't exist
-mkdir -p static/js/min
-mkdir -p static/css/min
+mkdir -p static/js
+mkdir -p static/css
 
-echo "Installing minification tools..."
-# Check if uglify-js is installed
-if ! command -v uglifyjs &> /dev/null; then
-    echo "Installing uglify-js..."
-    npm install -g uglify-js
-fi
+echo "Minifying JavaScript files using npx..."
+# Minify JavaScript files using npx (no global install needed)
+npx uglify-js static/js/game.js -c -m -o static/js/game.min.js
+npx uglify-js static/js/auth.js -c -m -o static/js/auth.min.js
 
-# Check if clean-css-cli is installed
-if ! command -v cleancss &> /dev/null; then
-    echo "Installing clean-css-cli..."
-    npm install -g clean-css-cli
-fi
-
-echo "Minifying JavaScript files..."
-# Minify JavaScript files
-uglifyjs static/js/game.js -c -m -o static/js/game.min.js
-uglifyjs static/js/auth.js -c -m -o static/js/auth.min.js
-
-echo "Minifying CSS files..."
-# Minify CSS files
-cleancss -o static/css/styles.min.css static/css/styles.css
+echo "Minifying CSS files using npx..."
+# Minify CSS files using npx (no global install needed)
+npx clean-css-cli -o static/css/styles.min.css static/css/styles.css
 
 echo "Minification complete!"
 echo ""
