@@ -449,11 +449,11 @@
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label for="loginUsername">Username</label>
-                    <input type="text" id="loginUsername" name="username" required minlength="3" maxlength="20">
+                    <input type="text" id="loginUsername" name="username" required minlength="3" maxlength="20" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" name="password" required minlength="6">
+                    <input type="password" id="loginPassword" name="password" required minlength="6" autocomplete="current-password">
                 </div>
                 <button type="submit" class="auth-submit-btn">Login</button>
             </form>
@@ -471,7 +471,7 @@
             <form id="registerForm" onsubmit="handleRegister(event)">
                 <div class="form-group">
                     <label for="registerUsername">Username</label>
-                    <input type="text" id="registerUsername" name="username" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_-]+">
+                    <input type="text" id="registerUsername" name="username" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_-]+" autocomplete="username">
                     <small>Letters, numbers, underscores, and hyphens only</small>
                 </div>
                 <div class="form-group">
@@ -480,7 +480,7 @@
                 </div>
                 <div class="form-group">
                     <label for="registerPassword">Password</label>
-                    <input type="password" id="registerPassword" name="password" required minlength="6">
+                    <input type="password" id="registerPassword" name="password" required minlength="6" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="registerSecurityQuestion">Security Question</label>
@@ -509,7 +509,7 @@
             <form id="passwordResetForm" onsubmit="handlePasswordReset(event)">
                 <div class="form-group">
                     <label for="resetUsername">Username</label>
-                    <input type="text" id="resetUsername" name="username" required>
+                    <input type="text" id="resetUsername" name="username" required autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="resetDisplayName">Display Name</label>
@@ -527,7 +527,7 @@
                     </div>
                     <div class="form-group">
                         <label for="resetNewPassword">New Password</label>
-                        <input type="password" id="resetNewPassword" name="newPassword" required minlength="6">
+                        <input type="password" id="resetNewPassword" name="newPassword" required minlength="6" autocomplete="new-password">
                     </div>
                 </div>
                 <button type="button" id="verifyUserBtn" class="auth-submit-btn secondary" onclick="verifyUserForReset()">Verify Identity</button>

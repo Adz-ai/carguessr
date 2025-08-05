@@ -1,3 +1,4 @@
+
 # Database Migration Guide
 
 This guide explains how to set up the CarGuessr database on a new machine or migrate from JSON to SQLite.

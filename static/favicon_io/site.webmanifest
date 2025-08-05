@@ -1,6 +1,7 @@
 {
   "name": "CarGuessr",
   "short_name": "CarGuessr",
+  "description": "Test your car price guessing skills! Play multiple game modes and compete on the leaderboard.",
   "icons": [
     {
       "src": "/static/favicon_io/android-chrome-192x192.png",
@@ -11,11 +12,28 @@
       "src": "/static/favicon_io/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
+      }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/images/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CarGuessr desktop gameplay"
+    },
+    {
+      "src": "/static/images/screenshot-mobile.png",
+      "sizes": "862x1864",
+      "type": "image/png",
+      "label": "CarGuessr mobile gameplay"
     }
   ],
   "theme_color": "#0f0f23",
   "background_color": "#0f0f23",
   "display": "standalone",
+  "orientation": "any",
   "start_url": "/",
-  "scope": "/"
+  "scope": "/",
+  "categories": ["games", "entertainment"]
 }
