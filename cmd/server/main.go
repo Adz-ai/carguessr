@@ -39,6 +39,7 @@ import (
 	"strings"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
@@ -60,6 +61,9 @@ func main() {
 
 	// Initialize Gin router
 	r := gin.Default()
+
+	// Enable gzip compression for better performance
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	// Limit request body size (1MB max)
 	r.MaxMultipartMemory = 1 << 20 // 1MB

@@ -261,7 +261,7 @@ header h1 {
 .difficulty-button.active {
     background: rgba(32, 178, 170, 0.2);
     border-color: #20b2aa;
-    color: #20b2aa;
+    color: #40e8dd;
     box-shadow: 0 0 20px rgba(32, 178, 170, 0.3);
 }
 
