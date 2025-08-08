@@ -640,8 +640,15 @@ function endGame() {
 // Close modals when clicking outside
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
+        const modalId = event.target.id;
+        // Prevent closing critical game modals by clicking outside
+        const criticalModals = ['resultModal', 'gameOverModal', 'challengeCompleteModal', 'nameInputModal'];
+        if (criticalModals.includes(modalId)) {
+            return; // Don't close these modals when clicking outside
+        }
+        
         // Special handling for leaderboard modal to ensure proper redirect
-        if (event.target.id === 'leaderboardModal') {
+        if (modalId === 'leaderboardModal') {
             closeLeaderboard();
         } else {
             event.target.style.display = 'none';
