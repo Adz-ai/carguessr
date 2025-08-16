@@ -11,7 +11,7 @@ import (
 
 	"autotraderguesser/internal/models"
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/stealth"
 )
 
 const (
@@ -64,7 +64,8 @@ func (s *BonhamsScraper) ScrapeCarListings(maxListings int) ([]*models.BonhamsCa
 
 // scrapeWithBrowser uses rod browser for scraping with pagination support
 func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCar, error) {
-	page := s.browser.MustPage()
+	// Use stealth page for better anti-detection
+	page := stealth.MustPage(s.browser)
 	defer page.Close()
 
 	var cars []*models.BonhamsCar
@@ -300,7 +301,8 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 
 // scrapeDetailPage scrapes a single car detail page from Bonhams
 func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
-	page := s.browser.MustPage()
+	// Use stealth page for better anti-detection
+	page := stealth.MustPage(s.browser)
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("Detail page panic recovered: %v\n", err)
@@ -590,8 +592,8 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 
 // scrapeDetailPageConcurrent is an optimized version for concurrent scraping
 func (s *BonhamsScraper) scrapeDetailPageConcurrent(url string) *models.BonhamsCar {
-	// Create a new page for concurrent scraping
-	page := s.browser.MustPage()
+	// Use stealth page for better anti-detection
+	page := stealth.MustPage(s.browser)
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("Detail page panic recovered: %v\n", err)
@@ -867,25 +869,13 @@ func (s *BonhamsScraper) parsePrice(priceText string, car *models.BonhamsCar) {
 }
 
 func (s *BonhamsScraper) initBrowser() error {
-	userAgent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-	l := launcher.New().
-		Headless(true).
-		Set("user-agent", userAgent).
-		Set("disable-blink-features", "AutomationControlled").
-		Set("disable-web-security").
-		Set("allow-running-insecure-content").
-		Set("max-connections-per-host", "10"). // Increase concurrent connections
-		Set("aggressive-cache-discard").       // Reduce memory usage
-		Set("disable-dev-shm-usage")           // Use /tmp instead of /dev/shm
-
-	url, err := l.Launch()
+	// Use the unified browser creation function
+	browser, err := CreateBrowser()
 	if err != nil {
 		return err
 	}
-
-	s.browser = rod.New().ControlURL(url)
-	return s.browser.Connect()
+	s.browser = browser
+	return nil
 }
 
 func (s *BonhamsScraper) closeBrowser() {

@@ -14,7 +14,6 @@ import (
 	"autotraderguesser/internal/models"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/stealth"
 )
 
@@ -42,16 +41,12 @@ func (s *LookersScraper) initBrowser() error {
 		return nil // Already initialized
 	}
 
-	path, _ := launcher.LookPath()
-	u := launcher.New().
-		Bin(path).
-		Headless(true).
-		MustLaunch()
-
-	s.browser = rod.New().
-		ControlURL(u).
-		MustConnect()
-
+	// Use the unified browser creation function
+	browser, err := CreateBrowser()
+	if err != nil {
+		return err
+	}
+	s.browser = browser
 	return nil
 }
 
