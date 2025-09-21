@@ -20,6 +20,8 @@ type Database struct {
 	db *sql.DB
 }
 
+var randomReader io.Reader = rand.Reader
+
 // NewDatabase creates a new database connection
 func NewDatabase(dbPath string) (*Database, error) {
 	// Ensure the directory exists
@@ -1004,7 +1006,7 @@ func (d *Database) GetUserLeaderboardStats(userID int) (map[string]interface{}, 
 // generateSessionToken generates a cryptographically secure random session token
 func generateSessionToken() string {
 	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := randomReader.Read(bytes); err != nil {
 		// Fallback to time-based if crypto/rand fails
 		return fmt.Sprintf("%d%d", time.Now().UnixNano(), time.Now().Unix()%10000)
 	}
