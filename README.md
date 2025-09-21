@@ -18,19 +18,9 @@ CarGuessr is a Go/Gin powered car price guessing game that serves a vanilla Java
 
 ### Using Make (recommended)
 ```bash
-git clone <your-repo-url>
-cd autotraderguesser
 make deps          # Download Go modules
 make swagger       # Optional: regenerate Swagger docs (requires swag)
 make dev           # Run in development mode with Swagger at /swagger/
-```
-
-### Manual setup
-```bash
-git clone <your-repo-url>
-cd autotraderguesser
-go mod download
-go run cmd/server/main.go
 ```
 
 Visit `http://localhost:8080` to play. The first request may take up to a minute while both scrapers populate caches in `data/` and seed the SQLite database at `data/carguessr.db`.
