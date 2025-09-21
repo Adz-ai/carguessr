@@ -1,30 +1,31 @@
-# CarGuessr 🚗💸
+# CarGuessr
 
-A fun web-based game where players guess the prices of real cars from Motors.co.uk listings. Built with Go/Gin backend and vanilla JavaScript frontend.
+CarGuessr is a Go/Gin powered car price guessing game that serves a vanilla JavaScript frontend. The backend curates 250 recent auction results from Bonhams for hard mode, dealership inventory from Lookers for easy mode, and exposes multiple game types, leaderboards, and a shareable challenge system.
 
-## Features
+## Highlights
+- Live data from Bonhams auctions (hard mode) and Lookers dealerships (easy mode) cached for seven days.
+- Gameplay modes: Stay at Zero, Streak, and 10-car Challenge sessions with persistent scoring.
+- Registered players can save scores, join friend challenges via invite codes, and track favourite difficulty in SQLite.
+- Hardened public API with rate limiting, security headers, honeypots, and admin-only refresh tooling.
+- Swagger documentation (development mode), REST API consumed by the static UI, and optional direct API usage.
 
-- **Real Motors.co.uk data** - Live car listings with actual prices, images, and details
-- **Fast scraping** - Data extracted directly from search results (no detail page navigation)
-- **Headless operation** - Runs silently without opening browser windows
-- Two game modes:
-  - **Stay at Zero**: Accumulate the lowest total price difference
-  - **Streak Mode**: Guess within 10% of the actual price or game over
-- Beautiful, responsive UI with clean car details
-- Real car images from Motors CDN
-- Direct links to original Motors.co.uk listings
+## Requirements
+- Go 1.24 (CGO enabled for `github.com/mattn/go-sqlite3`).
+- Chrome or Chromium available for [rod](https://github.com/go-rod/rod) headless scraping (Linux hosts may need `--no-sandbox` prerequisites such as `libasound2`, `libnss3`, `libx11-xcb`).
+- `swag` CLI (`go install github.com/swaggo/swag/cmd/swag@latest`) if you want to regenerate API docs via `make swagger` or `make setup`.
 
 ## Quick Start
 
-### Using Make (Recommended)
+### Using Make (recommended)
 ```bash
 git clone <your-repo-url>
 cd autotraderguesser
-make setup    # Install dependencies and generate docs
-make run      # Start the server
+make deps          # Download Go modules
+make swagger       # Optional: regenerate Swagger docs (requires swag)
+make dev           # Run in development mode with Swagger at /swagger/
 ```
 
-### Manual Setup
+### Manual setup
 ```bash
 git clone <your-repo-url>
 cd autotraderguesser
@@ -32,129 +33,77 @@ go mod download
 go run cmd/server/main.go
 ```
 
-Open your browser to `http://localhost:8080`
+Visit `http://localhost:8080` to play. The first request may take up to a minute while both scrapers populate caches in `data/` and seed the SQLite database at `data/carguessr.db`.
 
-The game automatically fetches real car data from Motors.co.uk (takes 5-10 seconds on first load). If scraping fails, it falls back to sample data.
+## Configuration & Data Storage
+- `ADMIN_KEY` (optional) protects `/api/admin/*` routes. If unset, a temporary key is generated and printed at startup.
+- `PORT` (optional) overrides the default `8080`.
+- Cached listings are written to `data/bonhams_cache.json` and `data/lookers_cache.json` and refreshed automatically every seven days (or via the admin API).
+- Game state, challenge templates, user accounts, and leaderboard entries live in `data/carguessr.db`.
 
-## Game Modes
+## Gameplay Modes
+- **Stay at Zero** – accumulate the smallest total difference between guesses and actual prices.
+- **Streak** – keep guessing within ±10 % to extend your streak; one miss ends the run.
+- **Challenge** – ten curated cars per session with GeoGuessr-style scoring. Registered users can create friend challenges that others join via a six-character code.
+- Support for easy (`difficulty=easy`) and hard (`difficulty=hard`) listings across modes. Supply `X-Session-ID` to persist state from custom clients; the frontend handles this automatically.
 
-### 🎯 Stay at Zero
-- Start with a score of 0
-- Each guess adds the absolute difference to your score
-- Goal: Keep your cumulative score as low as possible
-
-### 🔥 Streak Mode  
-- Guess within 10% of the actual price to continue
-- Each correct guess adds 1 to your streak
-- One wrong guess ends the game
-
-## Example Real Cars
-
-From live Motors.co.uk data:
-- **2018 Hyundai TUCSON** - £8,495 (63k miles, 1.6L Petrol, Manual, SUV)
-- **2017 Toyota Yaris** - £7,995 (42k miles, 1.5L Hybrid, Auto, Hatchback)
-- **2016 Honda Jazz** - £7,450 (42k miles, 1.3L Petrol, Auto, Hatchback)
-- **2016 BMW X3** - £6,495 (103k miles, 2L Diesel, Manual, SUV)
-
-Each car includes detailed specs: year, engine size, mileage, fuel type, gearbox, body type, real images, and links to the original Motors listing!
-
-## Car Details Displayed
-
-- **Make & Model** (title)
-- **Year**
-- **Engine Size** (1.6L, 2L, etc.)
-- **Mileage** 
-- **Fuel Type** (Petrol, Diesel, Hybrid, Electric)
-- **Gearbox** (Manual, Auto, CVT)
-- **Body Type** (SUV, Hatchback, Saloon, Estate)
-
-## Available Commands
-
-```bash
-make run           # Start the server
-make dev           # Run in development mode  
-make build         # Build binary
-make test          # Run tests
-make test-scraper  # Test Motors scraper
-make check-listings# Check loaded cars
-make swagger       # Generate API docs
-make clean         # Clean build files
-make kill          # Kill running servers
-make help          # Show all commands
-```
-
-## API Endpoints
-
-```bash
-# Check data source status
-curl http://localhost:8080/api/data-source
-
-# Get all available cars with full details
-curl http://localhost:8080/api/listings
-
-# Get a random car for the game (price hidden)
-curl http://localhost:8080/api/random-listing
-
-# Test the Motors scraper directly
-curl http://localhost:8080/api/test-scraper
-
-# View API documentation
-open http://localhost:8080/swagger/
-```
-
-## Project Structure
+## API Overview
+Public endpoints are rate limited to ~60 req/min; admin endpoints require `X-Admin-Key`.
 
 ```
-autotraderguesser/
-├── cmd/server/          # Main application 
-├── internal/
-│   ├── game/           # Game logic and handlers
-│   ├── models/         # Data models (Car, GuessRequest, etc.)
-│   └── scraper/        # Motors.co.uk scraping
-├── static/
-│   ├── css/            # Stylesheets
-│   ├── js/             # Frontend JavaScript
-│   └── index.html      # Main HTML file
-├── docs/               # Swagger API documentation
-├── Makefile           # Build and development commands
-└── README.md          # This file
+GET  /api/random-listing                # Hard mode, price hidden
+GET  /api/random-enhanced-listing       # ?difficulty=easy|hard
+POST /api/check-guess                   # Body: listingId, guessedPrice, gameMode, difficulty
+GET  /api/leaderboard                   # Optional mode=streak|challenge, difficulty=easy|hard
+POST /api/leaderboard/submit            # Submit score to leaderboard
+
+POST /api/challenge/start               # Begin challenge session
+GET  /api/challenge/:sessionId          # Retrieve current challenge state
+POST /api/challenge/:sessionId/guess    # Submit guess within challenge
+
+POST /api/auth/register | login | logout | reset-password
+GET/PUT /api/auth/profile               # Requires session cookie
+
+POST /api/friends/challenges            # Create invite-only challenge (auth required)
+POST /api/friends/challenges/:code/join # Join friend challenge
+GET  /api/friends/challenges/:code       # Challenge metadata & participants
+
+GET  /api/data-source                   # Listing counts per source
+GET  /api/health                        # Basic health check
+
+POST /api/admin/refresh-listings        # Manual scrape (rate limited)
+GET  /api/admin/cache-status            # Cache ages and counts
+GET  /api/admin/listings                # Full listing payload (with prices)
+GET  /api/admin/test-scraper            # Run Bonhams scrape diagnostic
 ```
 
-## Development
+Enable Swagger documentation by running in debug mode (`make dev`); browse at `/swagger/index.html`.
 
-The scraper uses Go Rod for headless browser automation to extract car data from Motors.co.uk search results. It includes:
+## Project Layout
+```
+cmd/server/main.go        # Gin setup, middleware wiring, route registration
+internal/game/handler.go  # Game logic, challenges, scoring, scraping orchestration
+internal/handlers/        # Auth, friend challenges, shared middleware contracts
+internal/database/        # SQLite schema, migrations, leaderboard & user persistence
+internal/scraper/         # Rod-based Bonhams & Lookers scrapers + browser helpers
+internal/cache/           # JSON cache helpers for auction/dealer listings
+static/                   # Vanilla JS/CSS frontend served by Gin
+docs/                     # Swagger specs generated via swag
+data/                     # SQLite database and JSON caches (created at runtime)
+```
 
-- **Variety**: Searches different UK locations for diverse car listings
-- **Data extraction**: Make, model, year, price, engine size, mileage, fuel type, transmission, body type
-- **Image handling**: Extracts real car images from Motors CDN
-- **Error handling**: Falls back to sample data if scraping fails
-- **Performance**: Fast extraction from search results page (no detail page navigation)
+## Development Workflow
+- `make dev` – run with verbose logging and Swagger.
+- `make prod` – run without Swagger (sets `GIN_MODE=release`).
+- `make build` / `make build-prod` – compile binaries for local or Linux deployment.
+- `make test` – execute the Go test suite.
+- `make fmt` / `make lint` – format and lint Go code.
+- `make kill` – stop any stray development server processes.
 
 ## Troubleshooting
-
-**Server won't start?**
-```bash
-make kill  # Kill any running instances
-make run   # Start fresh
-```
-
-**No cars loading?**
-- Browser automation may take 5-10 seconds on first run
-- Check network connection to Motors.co.uk
-- Server automatically falls back to sample data if scraping fails
-
-**Want to see what cars are loaded?**
-```bash
-make check-listings
-```
-
-## Tech Stack
-
-- **Backend**: Go 1.24, Gin web framework
-- **Scraping**: Go Rod (headless Chrome automation)
-- **Frontend**: Vanilla JavaScript, CSS3
-- **API**: RESTful with Swagger documentation
-- **Build**: Make, Go modules
+- **Scraper failures** – ensure Chrome/Chromium is installed. On Linux, install headless dependencies and run with `GIN_MODE=release` for production-style behaviour. When the Bonhams scrape fails, the game falls back to a limited mock dataset.
+- **Stuck caches** – use `POST /api/admin/refresh-listings` with the admin key or delete the JSON cache files before restarting.
+- **Missing Swagger** – install the `swag` binary and rerun `make swagger`.
 
 ## License
 

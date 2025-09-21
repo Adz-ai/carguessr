@@ -39,6 +39,7 @@ type Handler struct {
 	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
 }
 
+// NewHandler creates a game handler, primes both data sources, and starts refresh schedulers.
 func NewHandler(db *database.Database) *Handler {
 	h := &Handler{
 		db:                db,
@@ -1421,6 +1422,7 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 	return session, nil
 }
 
+// generateSessionID returns a short, URL-safe identifier used to track anonymous sessions.
 func generateSessionID() string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 16)
@@ -1514,6 +1516,7 @@ func parseInt(s string) int {
 
 // trimLeaderboard keeps only top entries per game mode and difficulty combination
 
+// findLeaderboardPositionFromDB calculates the 1-based rank for the submitted entry.
 func (h *Handler) findLeaderboardPositionFromDB(entry models.LeaderboardEntry) int {
 	// Get all entries for the same game mode and difficulty, ordered by score
 	allEntries, err := h.db.GetLeaderboard(entry.GameMode, entry.Difficulty, 0) // 0 = no limit

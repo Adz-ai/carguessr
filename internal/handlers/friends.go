@@ -24,6 +24,7 @@ type GameHandlerInterface interface {
 	CreateTemplateChallenge(difficulty string, userID int) (*models.ChallengeSession, error)
 }
 
+// NewFriendsHandler wires the database and game bridge used for friend challenges.
 func NewFriendsHandler(db *database.Database, gameHandler GameHandlerInterface) *FriendsHandler {
 	return &FriendsHandler{
 		db:          db,
