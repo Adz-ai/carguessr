@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +19,9 @@ type FriendsHandler struct {
 	db          *database.Database
 	gameHandler GameHandlerInterface // Interface for game operations
 }
+
+var challengeRandReader io.Reader = rand.Reader
+var sessionRandReader io.Reader = rand.Reader
 
 // GameHandlerInterface defines the methods we need from game handler
 type GameHandlerInterface interface {
@@ -468,7 +472,7 @@ func (h *FriendsHandler) GetMyChallenges(c *gin.Context) {
 func generateChallengeCode() string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	bytes := make([]byte, 6)
-	rand.Read(bytes)
+	challengeRandReader.Read(bytes)
 
 	for i := range bytes {
 		bytes[i] = charset[bytes[i]%byte(len(charset))]
@@ -481,7 +485,7 @@ func generateChallengeCode() string {
 func generateSessionID() string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	bytes := make([]byte, 16)
-	rand.Read(bytes)
+	sessionRandReader.Read(bytes)
 	result := make([]byte, 16)
 	for i := range result {
 		result[i] = letters[bytes[i]%byte(len(letters))]
