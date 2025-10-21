@@ -205,3 +205,75 @@ func GetLookersCacheAge() (time.Duration, error) {
 func GetCacheAge() (time.Duration, error) {
 	return GetBonhamsCacheAge()
 }
+
+// LoadBonhamsFromCacheIgnoreExpiry loads cached Bonhams listings regardless of expiry (for fallback)
+func LoadBonhamsFromCacheIgnoreExpiry() ([]*models.BonhamsCar, error) {
+	file, err := os.Open(BonhamsCacheFileName)
+	if err != nil {
+		return nil, fmt.Errorf("no cache file found: %v", err)
+	}
+	defer file.Close()
+
+	var cache BonhamsCache
+	if err := json.NewDecoder(file).Decode(&cache); err != nil {
+		return nil, fmt.Errorf("error reading cache file: %v", err)
+	}
+
+	age := time.Since(cache.Timestamp)
+	fmt.Printf("📦 Loaded %d Bonhams cars from expired cache (%.1f days old)\n",
+		len(cache.Data), age.Hours()/24)
+	return cache.Data, nil
+}
+
+// LoadLookersFromCacheIgnoreExpiry loads cached Lookers listings regardless of expiry (for fallback)
+func LoadLookersFromCacheIgnoreExpiry() ([]*models.LookersCar, error) {
+	file, err := os.Open(LookersCacheFileName)
+	if err != nil {
+		return nil, fmt.Errorf("no cache file found: %v", err)
+	}
+	defer file.Close()
+
+	var cache LookersCache
+	if err := json.NewDecoder(file).Decode(&cache); err != nil {
+		return nil, fmt.Errorf("error reading cache file: %v", err)
+	}
+
+	age := time.Since(cache.Timestamp)
+	fmt.Printf("📦 Loaded %d Lookers cars from expired cache (%.1f days old)\n",
+		len(cache.Data), age.Hours()/24)
+	return cache.Data, nil
+}
+
+// BumpBonhamsExpiry updates the cache timestamp to extend its life by 7 days
+func BumpBonhamsExpiry() error {
+	// Load existing cache data (ignoring expiry)
+	listings, err := LoadBonhamsFromCacheIgnoreExpiry()
+	if err != nil {
+		return fmt.Errorf("cannot bump expiry: %v", err)
+	}
+
+	// Resave with new timestamp
+	if err := SaveBonhamsToCache(listings); err != nil {
+		return fmt.Errorf("failed to bump Bonhams expiry: %v", err)
+	}
+
+	fmt.Printf("⏰ Bumped Bonhams cache expiry - valid for another 7 days\n")
+	return nil
+}
+
+// BumpLookersExpiry updates the cache timestamp to extend its life by 7 days
+func BumpLookersExpiry() error {
+	// Load existing cache data (ignoring expiry)
+	listings, err := LoadLookersFromCacheIgnoreExpiry()
+	if err != nil {
+		return fmt.Errorf("cannot bump expiry: %v", err)
+	}
+
+	// Resave with new timestamp
+	if err := SaveLookersToCache(listings); err != nil {
+		return fmt.Errorf("failed to bump Lookers expiry: %v", err)
+	}
+
+	fmt.Printf("⏰ Bumped Lookers cache expiry - valid for another 7 days\n")
+	return nil
+}

@@ -14,12 +14,14 @@ import (
 	"autotraderguesser/internal/models"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
 )
 
 // LookersScraper handles scraping from Lookers.co.uk
 type LookersScraper struct {
-	browser *rod.Browser
+	browser    *rod.Browser
+	browserMux sync.Mutex // Protects browser operations
 }
 
 // NewLookersScraper creates a new Lookers scraper
@@ -29,8 +31,10 @@ func NewLookersScraper() *LookersScraper {
 
 // Close closes the browser connection
 func (s *LookersScraper) Close() {
+	s.browserMux.Lock()
+	defer s.browserMux.Unlock()
 	if s.browser != nil {
-		s.browser.MustClose()
+		_ = s.browser.Close()
 		s.browser = nil
 	}
 }
@@ -163,11 +167,17 @@ func scrapeLookersURL(browser *rod.Browser, url string, maxCars int, bodyType st
 
 	// Create stealth page
 	page := stealth.MustPage(browser)
-	defer page.MustClose()
+	defer func() {
+		_ = page.Close()
+	}()
 
 	// Navigate to Lookers Used Cars
-	page.MustNavigate(url)
-	page.MustWaitLoad()
+	if err := page.Navigate(url); err != nil {
+		return nil, fmt.Errorf("failed to navigate: %v", err)
+	}
+	if err := page.WaitLoad(); err != nil {
+		return nil, fmt.Errorf("failed to wait for load: %v", err)
+	}
 
 	// Wait for content to load
 	time.Sleep(3 * time.Second)
@@ -252,7 +262,10 @@ func handleCookieConsent(page *rod.Page) {
 		cookieButton, err := page.Timeout(3 * time.Second).Element(selector)
 		if err == nil && cookieButton != nil {
 			log.Printf("Found cookie button with selector: %s", selector)
-			cookieButton.MustClick()
+			if err := cookieButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+				log.Printf("Failed to click cookie button: %v", err)
+				continue
+			}
 			log.Println("Cookie consent accepted")
 			time.Sleep(2 * time.Second)
 			cookieHandled = true
@@ -294,11 +307,17 @@ func loadMoreCars(page *rod.Page, maxCars int) {
 				log.Printf("Found Load More button with selector: %s", selector)
 
 				// Scroll to the button first
-				loadMoreBtn.MustScrollIntoView()
+				if err := loadMoreBtn.ScrollIntoView(); err != nil {
+					log.Printf("Failed to scroll to Load More button: %v", err)
+					continue
+				}
 				time.Sleep(1 * time.Second)
 
 				// Click the button
-				loadMoreBtn.MustClick()
+				if err := loadMoreBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+					log.Printf("Failed to click Load More button: %v", err)
+					continue
+				}
 				log.Println("Clicked Load More button")
 				loadMoreFound = true
 
@@ -472,19 +491,19 @@ func carWorker(browser *rod.Browser, jobChan <-chan CarJob, resultChan chan<- Ca
 func scrapeCarDetails(browser *rod.Browser, car *models.LookersCar) error {
 	log.Printf("Fetching details from: %s", car.OriginalURL)
 
-	// Create new page for car details
+	// Create new stealth page for car details
 	detailPage := stealth.MustPage(browser)
-	defer detailPage.MustClose()
+	defer func() {
+		_ = detailPage.Close()
+	}()
 
 	detailPage = detailPage.Timeout(15 * time.Second)
 
-	err := detailPage.Navigate(car.OriginalURL)
-	if err != nil {
+	if err := detailPage.Navigate(car.OriginalURL); err != nil {
 		return fmt.Errorf("failed to navigate: %v", err)
 	}
 
-	err = detailPage.WaitLoad()
-	if err != nil {
+	if err := detailPage.WaitLoad(); err != nil {
 		return fmt.Errorf("failed to load: %v", err)
 	}
 

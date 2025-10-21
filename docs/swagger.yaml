@@ -6,7 +6,10 @@ definitions:
         type: number
       carId:
         type: string
+      carIndex:
+        type: integer
       difference:
+        description: Calculated field
         type: number
       guessedPrice:
         type: number
@@ -29,7 +32,10 @@ definitions:
         type: number
       carId:
         type: string
+      carIndex:
+        type: integer
       difference:
+        description: Calculated field
         type: number
       guessedPrice:
         type: number
@@ -60,6 +66,8 @@ definitions:
         type: string
       currentCar:
         type: integer
+      difficulty:
+        type: string
       guesses:
         items:
           $ref: '#/definitions/models.ChallengeGuess'
@@ -71,6 +79,8 @@ definitions:
       startTime:
         type: string
       totalScore:
+        type: integer
+      userId:
         type: integer
     type: object
   models.EnhancedCar:
@@ -200,19 +210,29 @@ definitions:
   models.LeaderboardEntry:
     properties:
       date:
+        description: Formatted date for JSON response
         type: string
       difficulty:
         description: '"easy" or "hard", defaults to "hard" for backward compatibility'
         type: string
+      friendChallengeId:
+        type: integer
       gameMode:
         type: string
       id:
+        type: integer
+      legacyId:
+        description: For migration from JSON
         type: string
       name:
         maxLength: 20
         minLength: 1
         type: string
       score:
+        type: integer
+      sessionId:
+        type: string
+      userId:
         type: integer
     required:
     - name
@@ -248,18 +268,16 @@ host: localhost:8080
 info:
   contact:
     name: CarGuessr Support
-    url: https://github.com/Adz-ai/carguessr/issues
-  description: A fun car price guessing game with multiple game modes using real car
-    data from Bonhams Auction House (Hard mode) and Lookers dealership (Easy mode).
-    Features Challenge Mode with GeoGuessr-style scoring, Streak Mode, and endless
-    Stay at Zero mode. Includes comprehensive security, rate limiting, leaderboards,
-    mobile auto-scroll, and session-based car history tracking to prevent repetition.
+    url: https://github.com/your-repo/carguessr/issues
+  description: A fun car price guessing game with multiple game modes using real Bonhams
+    Car Auction data. Now with enhanced security, rate limiting, and 250 cars with
+    7-day refresh cycles.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
   termsOfService: https://carguessr.uk
   title: CarGuessr API
-  version: "2.2"
+  version: "2.1"
 paths:
   /api/admin/cache-status:
     get:

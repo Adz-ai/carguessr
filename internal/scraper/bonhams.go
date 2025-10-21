@@ -25,8 +25,9 @@ const (
 
 // BonhamsScraper handles scraping from Bonhams Car Auctions
 type BonhamsScraper struct {
-	browser *rod.Browser
-	enabled bool
+	browser    *rod.Browser
+	enabled    bool
+	browserMux sync.Mutex // Protects browser operations
 }
 
 // NewBonhamsScraper creates a new Bonhams scraper
@@ -64,9 +65,17 @@ func (s *BonhamsScraper) ScrapeCarListings(maxListings int) ([]*models.BonhamsCa
 
 // scrapeWithBrowser uses rod browser for scraping with pagination support
 func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCar, error) {
-	// Use stealth page for better anti-detection
-	page := stealth.MustPage(s.browser)
-	defer page.Close()
+	// Create stealth page with synchronization
+	page := s.createStealthPage()
+	if page == nil {
+		return nil, fmt.Errorf("failed to create stealth page")
+	}
+
+	defer func() {
+		s.browserMux.Lock()
+		_ = page.Close()
+		s.browserMux.Unlock()
+	}()
 
 	var cars []*models.BonhamsCar
 	var allFoundLinks []string
@@ -89,10 +98,16 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		searchURL := fmt.Sprintf("https://carsonline.bonhams.com/en/auctions/results?page=%d", pageNum)
 
 		fmt.Printf("📍 Navigating to page %d: %s\n", pageNum, searchURL)
-		page.MustNavigate(searchURL)
+		if err := page.Navigate(searchURL); err != nil {
+			fmt.Printf("Failed to navigate to page %d: %v\n", pageNum, err)
+			continue
+		}
 
 		// Use WaitStable for smarter waiting
-		page.MustWaitStable()
+		if err := page.WaitStable(2 * time.Second); err != nil {
+			fmt.Printf("Failed to wait for page %d to stabilize: %v\n", pageNum, err)
+			continue
+		}
 
 		// Look for car listing elements - Bonhams uses /listings/ URLs
 		linkSelectors := []string{
@@ -301,13 +316,20 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 
 // scrapeDetailPage scrapes a single car detail page from Bonhams
 func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
-	// Use stealth page for better anti-detection
-	page := stealth.MustPage(s.browser)
+	// Create stealth page with synchronization
+	page := s.createStealthPage()
+	if page == nil {
+		fmt.Printf("Failed to create stealth page\n")
+		return nil
+	}
+
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("Detail page panic recovered: %v\n", err)
 		}
-		page.Close()
+		s.browserMux.Lock()
+		_ = page.Close()
+		s.browserMux.Unlock()
 	}()
 
 	if err := page.Navigate(url); err != nil {
@@ -315,9 +337,15 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 		return nil
 	}
 
-	page.MustWaitLoad()
+	if err := page.WaitLoad(); err != nil {
+		fmt.Printf("Failed to wait for load: %v\n", err)
+		return nil
+	}
 	time.Sleep(5 * time.Second)
-	page.MustWaitStable()
+	if err := page.WaitStable(2 * time.Second); err != nil {
+		fmt.Printf("Failed to wait for stable: %v\n", err)
+		// Continue anyway
+	}
 
 	car := &models.BonhamsCar{
 		ID:          fmt.Sprintf("bonhams-%d", time.Now().UnixNano()),
@@ -592,13 +620,21 @@ func (s *BonhamsScraper) scrapeDetailPage(url string) *models.BonhamsCar {
 
 // scrapeDetailPageConcurrent is an optimized version for concurrent scraping
 func (s *BonhamsScraper) scrapeDetailPageConcurrent(url string) *models.BonhamsCar {
-	// Use stealth page for better anti-detection
-	page := stealth.MustPage(s.browser)
+	// Create stealth page with synchronization
+	page := s.createStealthPage()
+	if page == nil {
+		fmt.Printf("Failed to create stealth page\n")
+		return nil
+	}
+
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("Detail page panic recovered: %v\n", err)
 		}
-		page.Close()
+		// Safely close the page
+		s.browserMux.Lock()
+		_ = page.Close()
+		s.browserMux.Unlock()
 	}()
 
 	// Set timeout for page operations
@@ -879,7 +915,26 @@ func (s *BonhamsScraper) initBrowser() error {
 }
 
 func (s *BonhamsScraper) closeBrowser() {
+	s.browserMux.Lock()
+	defer s.browserMux.Unlock()
 	if s.browser != nil {
-		s.browser.Close()
+		_ = s.browser.Close()
+		s.browser = nil
 	}
+}
+
+// createStealthPage creates a stealth page with mutex protection to avoid race conditions
+func (s *BonhamsScraper) createStealthPage() *rod.Page {
+	s.browserMux.Lock()
+	defer s.browserMux.Unlock()
+
+	// Use recover to catch any panics from MustPage
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Printf("Panic creating stealth page: %v\n", err)
+		}
+	}()
+
+	page := stealth.MustPage(s.browser)
+	return page
 }

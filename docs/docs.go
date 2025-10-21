@@ -690,7 +690,11 @@ const docTemplate = `{
                 "carId": {
                     "type": "string"
                 },
+                "carIndex": {
+                    "type": "integer"
+                },
                 "difference": {
+                    "description": "Calculated field",
                     "type": "number"
                 },
                 "guessedPrice": {
@@ -725,7 +729,11 @@ const docTemplate = `{
                 "carId": {
                     "type": "string"
                 },
+                "carIndex": {
+                    "type": "integer"
+                },
                 "difference": {
+                    "description": "Calculated field",
                     "type": "number"
                 },
                 "guessedPrice": {
@@ -772,6 +780,9 @@ const docTemplate = `{
                 "currentCar": {
                     "type": "integer"
                 },
+                "difficulty": {
+                    "type": "string"
+                },
                 "guesses": {
                     "type": "array",
                     "items": {
@@ -788,6 +799,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "totalScore": {
+                    "type": "integer"
+                },
+                "userId": {
                     "type": "integer"
                 }
             }
@@ -976,16 +990,24 @@ const docTemplate = `{
             ],
             "properties": {
                 "date": {
+                    "description": "Formatted date for JSON response",
                     "type": "string"
                 },
                 "difficulty": {
                     "description": "\"easy\" or \"hard\", defaults to \"hard\" for backward compatibility",
                     "type": "string"
                 },
+                "friendChallengeId": {
+                    "type": "integer"
+                },
                 "gameMode": {
                     "type": "string"
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "legacyId": {
+                    "description": "For migration from JSON",
                     "type": "string"
                 },
                 "name": {
@@ -994,6 +1016,12 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "score": {
+                    "type": "integer"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "userId": {
                     "type": "integer"
                 }
             }
@@ -1048,12 +1076,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "2.2",
+	Version:          "2.1",
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "CarGuessr API",
-	Description:      "A fun car price guessing game with multiple game modes using real car data from Bonhams Auction House (Hard mode) and Lookers dealership (Easy mode). Features Challenge Mode with GeoGuessr-style scoring, Streak Mode, and endless Stay at Zero mode. Includes comprehensive security, rate limiting, leaderboards, mobile auto-scroll, and session-based car history tracking to prevent repetition.",
+	Description:      "A fun car price guessing game with multiple game modes using real Bonhams Car Auction data. Now with enhanced security, rate limiting, and 250 cars with 7-day refresh cycles.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
