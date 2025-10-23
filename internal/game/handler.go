@@ -1661,7 +1661,8 @@ func generateSessionID() string {
 		// Fallback to timestamp-based ID (not ideal but better than failing)
 		return fmt.Sprintf("session_%d", time.Now().UnixNano())
 	}
-	return base64.URLEncoding.EncodeToString(b)
+	// Use RawURLEncoding (no padding) for URL-safe session IDs
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // addToRecentlyShown adds a car ID to the recently shown list for a session
@@ -1722,12 +1723,17 @@ func isValidListingID(id string) bool {
 
 // isValidSessionID validates session ID format
 func isValidSessionID(id string) bool {
-	// Session IDs should be 16 characters, alphanumeric only
-	if len(id) != 16 {
+	// Session IDs can be:
+	// - 16 characters alphanumeric (legacy format)
+	// - 22 characters base64 RawURL (new cryptographic format, no padding)
+	// - 19-25 characters for timestamp-based fallback format (session_<timestamp>)
+	if len(id) < 16 || len(id) > 32 {
 		return false
 	}
 
-	validID := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	// Allow base64 RawURLEncoding characters: alphanumeric, hyphen (-), underscore (_)
+	// Also allow legacy formats with session_ prefix
+	validID := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 	return validID.MatchString(id)
 }
 
