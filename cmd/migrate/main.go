@@ -381,6 +381,8 @@ func getCurrentSchema() []string {
 		// Friend challenge indexes
 		"CREATE INDEX IF NOT EXISTS idx_friend_challenges_code ON friend_challenges(challenge_code)",
 		"CREATE INDEX IF NOT EXISTS idx_friend_challenges_creator ON friend_challenges(creator_user_id)",
+		// Composite index for common query pattern: lookup by code AND check if active/expired
+		"CREATE INDEX IF NOT EXISTS idx_friend_challenges_code_active ON friend_challenges(challenge_code, is_active, expires_at)",
 
 		// Challenge participants table
 		`CREATE TABLE IF NOT EXISTS challenge_participants (
@@ -419,6 +421,8 @@ func getCurrentSchema() []string {
 		"CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard_entries(score)",
 		"CREATE INDEX IF NOT EXISTS idx_leaderboard_user_id ON leaderboard_entries(user_id)",
 		"CREATE INDEX IF NOT EXISTS idx_leaderboard_created_at ON leaderboard_entries(created_at)",
+		// Composite index for common query pattern: filter by game_mode AND difficulty
+		"CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_difficulty ON leaderboard_entries(game_mode, difficulty, score DESC)",
 
 		// Game sessions table
 		`CREATE TABLE IF NOT EXISTS game_sessions (
@@ -446,8 +450,8 @@ func getCurrentSchema() []string {
 		)`,
 
 		// Initial metadata
-		`INSERT OR REPLACE INTO database_metadata (key, value) VALUES 
-			('schema_version', '2.0'),
+		`INSERT OR REPLACE INTO database_metadata (key, value) VALUES
+			('schema_version', '2.2'),
 			('created_at', datetime('now')),
 			('migration_status', 'completed')`,
 	}
@@ -516,6 +520,18 @@ func getMigrations() []Migration {
 				"ALTER TABLE users ADD COLUMN session_expires_at DATETIME",
 				// Set expiration for existing sessions to 7 days from last_active
 				"UPDATE users SET session_expires_at = datetime(last_active, '+7 days') WHERE session_token IS NOT NULL",
+			},
+		},
+		{
+			Version:     "2.2",
+			Description: "Add composite indexes for query optimization",
+			SQL: []string{
+				// Composite index for leaderboard filtering by game_mode + difficulty
+				// This optimizes queries like: SELECT * FROM leaderboard_entries WHERE game_mode = ? AND difficulty = ? ORDER BY score DESC
+				"CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_difficulty ON leaderboard_entries(game_mode, difficulty, score DESC)",
+				// Composite index for friend challenge lookups by code with active status checks
+				// This optimizes queries like: SELECT * FROM friend_challenges WHERE challenge_code = ? AND is_active = 1 AND expires_at > datetime('now')
+				"CREATE INDEX IF NOT EXISTS idx_friend_challenges_code_active ON friend_challenges(challenge_code, is_active, expires_at)",
 			},
 		},
 	}
