@@ -306,11 +306,11 @@ func buildCSPPolicy() string {
 			"connect-src 'self' webpack:;"
 	}
 
-	// Production mode: Strict CSP without unsafe-inline/unsafe-eval
-	// For maximum security, frontend should use nonces or hashes for inline scripts
+	// Production mode: CSP with unsafe-inline for onclick handlers
+	// TODO: Refactor onclick handlers to event listeners in external JS for better security
 	return "default-src 'self'; " +
-		"script-src 'self' https://static.cloudflareinsights.com; " +
-		"style-src 'self'; " +
+		"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
+		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: https:; " +
 		"connect-src 'self'; " +
 		"font-src 'self'; " +
