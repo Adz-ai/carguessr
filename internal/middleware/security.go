@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -132,8 +133,9 @@ func SecurityHeaders() gin.HandlerFunc {
 		// Referrer policy
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Content Security Policy - relaxed for development with source maps
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' webpack:;")
+		// Content Security Policy - stricter in production, relaxed in development
+		csp := buildCSPPolicy()
+		c.Header("Content-Security-Policy", csp)
 
 		// Strict Transport Security (HTTPS only)
 		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -286,4 +288,35 @@ func HoneypotEndpoints() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// buildCSPPolicy creates a Content Security Policy header
+// In production: strict policy without unsafe-inline/unsafe-eval
+// In development: relaxed policy for easier debugging
+func buildCSPPolicy() string {
+	isDevelopment := os.Getenv("GIN_MODE") != "release"
+
+	if isDevelopment {
+		// Development mode: Allow inline scripts/styles for easier debugging
+		// Still includes Cloudflare Insights and webpack dev server support
+		return "default-src 'self'; " +
+			"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			"img-src 'self' data: https:; " +
+			"connect-src 'self' webpack:;"
+	}
+
+	// Production mode: Strict CSP without unsafe-inline/unsafe-eval
+	// For maximum security, frontend should use nonces or hashes for inline scripts
+	return "default-src 'self'; " +
+		"script-src 'self' https://static.cloudflareinsights.com; " +
+		"style-src 'self'; " +
+		"img-src 'self' data: https:; " +
+		"connect-src 'self'; " +
+		"font-src 'self'; " +
+		"object-src 'none'; " +
+		"base-uri 'self'; " +
+		"form-action 'self'; " +
+		"frame-ancestors 'none'; " +
+		"upgrade-insecure-requests;"
 }

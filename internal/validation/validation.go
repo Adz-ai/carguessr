@@ -18,14 +18,19 @@ func ValidateChallengeCode(code string) error {
 	return nil
 }
 
-// ValidateSessionID validates that a session ID is in the correct format (16 alphanumeric characters)
+// ValidateSessionID validates that a session ID is in the correct format
+// Supports multiple formats:
+// - 16 characters alphanumeric (legacy format)
+// - 22 characters base64 RawURL (new cryptographic format, no padding)
+// - 19-25 characters for timestamp-based fallback format (session_<timestamp>)
 func ValidateSessionID(sessionID string) error {
-	if len(sessionID) != 16 {
-		return fmt.Errorf("session ID must be exactly 16 characters")
+	if len(sessionID) < 16 || len(sessionID) > 32 {
+		return fmt.Errorf("session ID must be between 16 and 32 characters")
 	}
 
-	if !regexp.MustCompile(`^[a-zA-Z0-9]{16}$`).MatchString(sessionID) {
-		return fmt.Errorf("session ID must contain only letters and numbers")
+	// Allow alphanumeric plus URL-safe base64 characters (-, _)
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(sessionID) {
+		return fmt.Errorf("session ID contains invalid characters")
 	}
 
 	return nil

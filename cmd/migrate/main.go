@@ -276,10 +276,16 @@ func showMigrationStatus(db *sql.DB) {
 
 	fmt.Printf("📊 Current Schema Version: %s\n", version)
 
-	// Table counts
+	// Table counts - using whitelist for SQL injection prevention
 	tables := []string{"users", "leaderboard_entries", "challenge_sessions", "friend_challenges", "challenge_participants"}
 
 	for _, table := range tables {
+		// Validate table name is in whitelist before using in query
+		if !isValidTableName(table, tables) {
+			fmt.Printf("❌ Invalid table name: %s\n", table)
+			continue
+		}
+
 		var count int
 		err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
 		if err != nil {
@@ -556,4 +562,15 @@ func applyMigration(db *sql.DB, migration Migration) error {
 	}
 
 	return tx.Commit()
+}
+
+// isValidTableName checks if a table name is in the whitelist
+// This prevents SQL injection when using dynamic table names
+func isValidTableName(tableName string, whitelist []string) bool {
+	for _, validTable := range whitelist {
+		if tableName == validTable {
+			return true
+		}
+	}
+	return false
 }

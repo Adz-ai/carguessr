@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -21,6 +22,21 @@ const (
 	// 12 provides good security/performance balance in 2025 (4096 rounds)
 	bcryptCost = 12
 )
+
+// isSecureCookieEnabled checks if cookies should be marked as Secure (HTTPS only)
+// Returns true in production or when HTTPS_ENABLED=true environment variable is set
+func isSecureCookieEnabled() bool {
+	// Check explicit HTTPS_ENABLED environment variable
+	if os.Getenv("HTTPS_ENABLED") == "true" {
+		return true
+	}
+	// In release mode, assume HTTPS is enabled
+	if os.Getenv("GIN_MODE") == "release" {
+		return true
+	}
+	// Default to false for development
+	return false
+}
 
 type AuthHandler struct {
 	db *database.Database
@@ -148,7 +164,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		MaxAge:   86400 * 7, // 7 days
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   isSecureCookieEnabled(), // Automatically enabled in production/HTTPS
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -227,7 +243,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		MaxAge:   86400 * 7, // 7 days
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   isSecureCookieEnabled(), // Automatically enabled in production/HTTPS
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -254,7 +270,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	// Clear session cookie
-	c.SetCookie("session_token", "", -1, "/", "", false, true)
+	c.SetCookie("session_token", "", -1, "/", "", isSecureCookieEnabled(), true)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,

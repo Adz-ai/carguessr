@@ -32,6 +32,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -85,7 +86,7 @@ func main() {
 		"https://www.carguessr.uk", // Production www subdomain
 	}
 	config.AllowOrigins = allowedOrigins
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowMethods = []string{"GET", "POST", "OPTIONS"} // Aligned with HTTPMethodFilter for consistency
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "X-Session-ID"}
 	config.ExposeHeaders = []string{"Content-Length", "X-Session-ID"}
 	config.AllowCredentials = true
@@ -129,12 +130,9 @@ func main() {
 		log.Fatal("❌ ADMIN_KEY environment variable not set. Cannot start without proper admin key. Set ADMIN_KEY in your .env file or environment variables.")
 	}
 
-	// Prevent use of weak or default admin keys
-	if strings.Contains(strings.ToLower(adminKey), "change-this") ||
-		strings.Contains(strings.ToLower(adminKey), "default") ||
-		strings.Contains(strings.ToLower(adminKey), "temp") ||
-		len(adminKey) < 32 {
-		log.Fatal("❌ ADMIN_KEY is too weak or using a default value. Please set a strong, unique admin key (minimum 32 characters).")
+	// Validate admin key strength
+	if err := validateAdminKey(adminKey); err != nil {
+		log.Fatalf("❌ ADMIN_KEY validation failed: %v", err)
 	}
 
 	log.Println("✅ Admin key validated successfully")
@@ -305,4 +303,84 @@ func main() {
 	db.Close()
 
 	log.Println("✅ Server shutdown complete")
+}
+
+// validateAdminKey performs comprehensive admin key validation
+// Checks for length, obvious patterns, and cryptographic entropy
+func validateAdminKey(key string) error {
+	// Minimum length check
+	if len(key) < 32 {
+		return fmt.Errorf("admin key must be at least 32 characters (got %d)", len(key))
+	}
+
+	// Check for obvious weak patterns
+	lowercaseKey := strings.ToLower(key)
+	weakPatterns := []string{"change-this", "default", "temp", "test", "admin", "password", "secret"}
+	for _, pattern := range weakPatterns {
+		if strings.Contains(lowercaseKey, pattern) {
+			return fmt.Errorf("admin key contains weak pattern: %s", pattern)
+		}
+	}
+
+	// Check for repetitive characters (e.g., "aaaaaaa...")
+	if hasExcessiveRepetition(key) {
+		return fmt.Errorf("admin key has excessive character repetition - use a more random key")
+	}
+
+	// Check character variety (must contain at least 3 different character types)
+	charTypes := 0
+	hasLower := strings.ContainsAny(key, "abcdefghijklmnopqrstuvwxyz")
+	hasUpper := strings.ContainsAny(key, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	hasDigit := strings.ContainsAny(key, "0123456789")
+	hasSpecial := strings.ContainsAny(key, "!@#$%^&*()_+-=[]{}|;:,.<>?/~`")
+
+	if hasLower {
+		charTypes++
+	}
+	if hasUpper {
+		charTypes++
+	}
+	if hasDigit {
+		charTypes++
+	}
+	if hasSpecial {
+		charTypes++
+	}
+
+	if charTypes < 3 {
+		return fmt.Errorf("admin key must contain at least 3 different character types (lowercase, uppercase, digits, special)")
+	}
+
+	// Check for unique character count (must have at least 16 unique characters)
+	uniqueChars := make(map[rune]bool)
+	for _, char := range key {
+		uniqueChars[char] = true
+	}
+	if len(uniqueChars) < 16 {
+		return fmt.Errorf("admin key must have at least 16 unique characters (got %d)", len(uniqueChars))
+	}
+
+	return nil
+}
+
+// hasExcessiveRepetition checks if a string has excessive character repetition
+// Returns true if any character appears more than 30% of the time
+func hasExcessiveRepetition(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	charCount := make(map[rune]int)
+	for _, char := range s {
+		charCount[char]++
+	}
+
+	threshold := len(s) * 3 / 10 // 30%
+	for _, count := range charCount {
+		if count > threshold {
+			return true
+		}
+	}
+
+	return false
 }
