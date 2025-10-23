@@ -252,14 +252,14 @@ func (lc *LookersCar) ToEnhancedCar() *EnhancedCar {
 // GuessRequest represents a price guess from the user
 type GuessRequest struct {
 	ListingID    string  `json:"listingId" binding:"required"`
-	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0"`
+	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0,max=10000000"`
 	GameMode     string  `json:"gameMode" binding:"required,oneof=zero streak challenge"`
 	Difficulty   string  `json:"difficulty" binding:"omitempty,oneof=easy hard"` // Default to hard for backward compatibility
 }
 
 // ChallengeGuessRequest represents a price guess in challenge mode
 type ChallengeGuessRequest struct {
-	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0"`
+	GuessedPrice float64 `json:"guessedPrice" binding:"required,min=0,max=10000000"`
 }
 
 // GuessResponse represents the result of a guess

@@ -12,6 +12,7 @@ import (
 
 	"autotraderguesser/internal/database"
 	"autotraderguesser/internal/models"
+	"autotraderguesser/internal/util"
 	"autotraderguesser/internal/validation"
 )
 
@@ -60,6 +61,17 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 		return
 	}
 
+	// Validate and sanitize challenge title
+	sanitizedTitle, err := validation.ValidateChallengeTitle(req.Title)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	req.Title = sanitizedTitle
+
 	// Generate unique 6-character challenge code
 	challengeCode := generateChallengeCode()
 
@@ -80,11 +92,7 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 	// Create template challenge session (10 cars for consistent gameplay)
 	templateSession, err := h.gameHandler.CreateTemplateChallenge(req.Difficulty, u.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create challenge template",
-			"error":   err.Error(),
-		})
+		util.SafeErrorResponse(c, http.StatusInternalServerError, "Failed to create challenge template", err)
 		return
 	}
 
@@ -102,11 +110,7 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 	}
 
 	if err := h.db.CreateFriendChallenge(challenge); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create friend challenge",
-			"error":   err.Error(),
-		})
+		util.SafeErrorResponse(c, http.StatusInternalServerError, "Failed to create friend challenge", err)
 		return
 	}
 

@@ -16,6 +16,12 @@ import (
 	"autotraderguesser/internal/validation"
 )
 
+const (
+	// bcryptCost is the work factor for password hashing
+	// 12 provides good security/performance balance in 2025 (4096 rounds)
+	bcryptCost = 12
+)
+
 type AuthHandler struct {
 	db *database.Database
 }
@@ -93,8 +99,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	// Hash password with secure cost factor
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
@@ -104,7 +110,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// Hash security answer (normalize to lowercase for case-insensitive comparison)
-	hashedSecurityAnswer, err := bcrypt.GenerateFromPassword([]byte(strings.ToLower(strings.TrimSpace(req.SecurityAnswer))), bcrypt.DefaultCost)
+	hashedSecurityAnswer, err := bcrypt.GenerateFromPassword([]byte(strings.ToLower(strings.TrimSpace(req.SecurityAnswer))), bcryptCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
@@ -185,6 +191,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			Message: "Invalid username or password",
 		})
 		return
+	}
+
+	// Automatic hash upgrading: if the stored hash uses an older cost factor, rehash with current cost
+	currentHashCost, err := bcrypt.Cost([]byte(user.PasswordHash))
+	if err == nil && currentHashCost < bcryptCost {
+		// Password verified successfully, but using old cost - upgrade it
+		newHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
+		if err == nil {
+			// Update password with new hash (ignore errors - session creation is more important)
+			if err := h.db.UpdateUserPassword(user.ID, string(newHash)); err == nil {
+				fmt.Printf("✅ Upgraded password hash for user %s from cost %d to %d\n", user.Username, currentHashCost, bcryptCost)
+			}
+		}
 	}
 
 	// Generate new session token
@@ -385,7 +404,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcryptCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
@@ -523,6 +542,10 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 // generateSessionToken creates a cryptographically secure session token
 func generateSessionToken() string {
 	bytes := make([]byte, 32)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to timestamp-based token if crypto/rand fails
+		// This is not ideal but better than returning an error during auth
+		return fmt.Sprintf("fallback_%d_%d", time.Now().UnixNano(), time.Now().Unix()%10000)
+	}
 	return hex.EncodeToString(bytes)
 }

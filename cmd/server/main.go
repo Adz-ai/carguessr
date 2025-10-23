@@ -117,6 +117,9 @@ func main() {
 	// General API rate limiter: 60 requests per minute
 	generalLimiter := middleware.NewRateLimiter(rate.Limit(1), 60) // 1 request/second, burst of 60
 
+	// Auth rate limiter: 10 requests per minute (prevent brute force)
+	authLimiter := middleware.NewRateLimiter(rate.Limit(0.17), 10) // ~10 requests/minute
+
 	// Strict rate limiter for expensive operations: 2 requests per minute
 	strictLimiter := middleware.NewRateLimiter(rate.Limit(0.033), 2) // 2 requests/minute
 
@@ -179,14 +182,18 @@ func main() {
 	api.Use(middleware.RateLimitMiddleware(generalLimiter))
 	api.Use(authHandler.AuthMiddleware()) // Optional authentication - adds user context if authenticated
 	{
-		// Authentication endpoints
-		api.POST("/auth/register", authHandler.Register)
-		api.POST("/auth/login", authHandler.Login)
-		api.POST("/auth/logout", authHandler.Logout)
-		api.POST("/auth/reset-password", authHandler.ResetPassword)
-		api.POST("/auth/security-question", authHandler.GetSecurityQuestion)
-		api.GET("/auth/profile", authHandler.RequireAuth(), authHandler.GetProfile)
-		api.PUT("/auth/profile", authHandler.RequireAuth(), authHandler.UpdateProfile)
+		// Authentication endpoints with stricter rate limiting (prevent brute force)
+		auth := api.Group("/auth")
+		auth.Use(middleware.RateLimitMiddleware(authLimiter))
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/reset-password", authHandler.ResetPassword)
+			auth.POST("/security-question", authHandler.GetSecurityQuestion)
+			auth.GET("/profile", authHandler.RequireAuth(), authHandler.GetProfile)
+			auth.PUT("/profile", authHandler.RequireAuth(), authHandler.UpdateProfile)
+		}
 
 		// Game endpoints
 		api.GET("/random-listing", gameHandler.GetRandomListing)

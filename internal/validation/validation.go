@@ -57,3 +57,15 @@ func ValidateDisplayName(displayName string) error {
 
 	return nil
 }
+
+// ValidateChallengeTitle validates and sanitizes challenge titles
+func ValidateChallengeTitle(title string) (string, error) {
+	title = regexp.MustCompile(`\s+`).ReplaceAllString(title, " ")     // Normalize whitespace
+	title = regexp.MustCompile(`[<>\"'&]`).ReplaceAllString(title, "") // Remove HTML/XSS chars
+
+	if len(title) < 1 || len(title) > 100 {
+		return "", fmt.Errorf("challenge title must be between 1 and 100 characters")
+	}
+
+	return title, nil
+}

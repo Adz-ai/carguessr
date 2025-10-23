@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS friend_challenges (
 -- Create index for challenge code lookups
 CREATE INDEX IF NOT EXISTS idx_friend_challenges_code ON friend_challenges(challenge_code);
 CREATE INDEX IF NOT EXISTS idx_friend_challenges_creator ON friend_challenges(creator_user_id);
+-- Composite index for common query pattern: lookup by code AND check if active/expired
+CREATE INDEX IF NOT EXISTS idx_friend_challenges_code_active ON friend_challenges(challenge_code, is_active, expires_at);
 
 -- Challenge participants table
 CREATE TABLE IF NOT EXISTS challenge_participants (
@@ -114,6 +116,8 @@ CREATE INDEX IF NOT EXISTS idx_leaderboard_difficulty ON leaderboard_entries(dif
 CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard_entries(score);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_user_id ON leaderboard_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_created_at ON leaderboard_entries(created_at);
+-- Composite index for common query pattern: filter by game_mode AND difficulty
+CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_difficulty ON leaderboard_entries(game_mode, difficulty, score DESC);
 
 -- Game sessions for tracking streaks and zero mode
 CREATE TABLE IF NOT EXISTS game_sessions (
