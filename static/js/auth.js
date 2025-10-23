@@ -884,6 +884,34 @@ function showChallengeGuide() {
     document.getElementById('challengeGuideModal').style.display = 'flex';
 }
 
+// Home button function - ensures clean state on navigation to home
+function goHome() {
+    // Close ALL modals explicitly
+    closeAllModals();
+
+    // Explicitly hide the challenge guide modal to prevent it from persisting
+    const challengeGuideModal = document.getElementById('challengeGuideModal');
+    if (challengeGuideModal) {
+        challengeGuideModal.style.display = 'none';
+    }
+
+    // Hide game area if showing
+    const gameArea = document.getElementById('gameArea');
+    if (gameArea) {
+        gameArea.style.display = 'none';
+    }
+
+    // Show mode selection
+    const modeSelection = document.getElementById('modeSelection');
+    if (modeSelection) {
+        modeSelection.style.display = 'block';
+    }
+
+    // Hard reload with cache-busting to ensure fresh state
+    // Use window.location.href instead of reload() to force a clean navigation
+    window.location.href = window.location.origin + window.location.pathname + '?t=' + Date.now();
+}
+
 window.authFunctions = {
     checkAuthStatus,
     showChallengeLeaderboard,
