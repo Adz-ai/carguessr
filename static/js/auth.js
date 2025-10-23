@@ -6,6 +6,32 @@ let currentChallengeCode = null;
 
 // Initialize authentication state on page load
 document.addEventListener('DOMContentLoaded', async () => {
+    // FORCE correct initial state - ensure modals are closed
+    // This fixes the bug where challengeGuideModal gets stuck open
+    const challengeGuideModal = document.getElementById('challengeGuideModal');
+    if (challengeGuideModal) {
+        challengeGuideModal.style.display = 'none';
+    }
+
+    // Ensure mode selection is visible on fresh page load
+    const modeSelection = document.getElementById('modeSelection');
+    if (modeSelection) {
+        modeSelection.style.display = 'block';
+    }
+
+    // Ensure game area is hidden initially
+    const gameArea = document.getElementById('gameArea');
+    if (gameArea) {
+        gameArea.style.display = 'none';
+    }
+
+    // Close all other modals to ensure clean state
+    document.querySelectorAll('.modal').forEach(modal => {
+        if (modal.id !== 'challengeGuideModal') {
+            modal.style.display = 'none';
+        }
+    });
+
     await checkAuthStatus();
 });
 

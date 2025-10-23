@@ -150,6 +150,9 @@ func main() {
 	r.Static("/static", "./static")
 	r.StaticFile("/", "./static/index.html")
 
+	// Diagnostic tools
+	r.StaticFile("/clear-state", "./clear_state.html")
+
 	// SEO files at root level
 	r.StaticFile("/sitemap.xml", "./static/sitemap.xml")
 	r.StaticFile("/robots.txt", "./static/robots.txt")
