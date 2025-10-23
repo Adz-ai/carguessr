@@ -135,8 +135,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Set session cookie
-	c.SetCookie("session_token", sessionToken, 86400*30, "/", "", false, true) // 30 days for registered users
+	// Set session cookie with SameSite protection (7 days to match server expiration)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		MaxAge:   86400 * 7, // 7 days
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	// Don't return password hash
 	user.PasswordHash = ""
@@ -193,8 +201,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Set session cookie
-	c.SetCookie("session_token", sessionToken, 86400*30, "/", "", false, true) // 30 days
+	// Set session cookie with SameSite protection (7 days to match server expiration)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		MaxAge:   86400 * 7, // 7 days
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	// Don't return password hash
 	user.PasswordHash = ""
@@ -455,6 +471,14 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 		// Get user by session token
 		user, err := h.db.GetUserBySessionToken(sessionToken)
 		if err != nil {
+			c.Next() // Continue without user context
+			return
+		}
+
+		// Check if session has expired
+		if user.SessionExpiresAt != nil && time.Now().After(*user.SessionExpiresAt) {
+			// Session expired - clear the cookie and reject
+			c.SetCookie("session_token", "", -1, "/", "", false, true)
 			c.Next() // Continue without user context
 			return
 		}

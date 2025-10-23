@@ -4,19 +4,20 @@ import "time"
 
 // User represents a user account
 type User struct {
-	ID                 int       `json:"id" db:"id"`
-	Username           string    `json:"username" db:"username"`
-	PasswordHash       string    `json:"-" db:"password_hash"` // Never include in JSON responses
-	DisplayName        string    `json:"displayName" db:"display_name"`
-	AvatarURL          string    `json:"avatarUrl,omitempty" db:"avatar_url"`
-	IsGuest            bool      `json:"isGuest" db:"is_guest"`
-	SessionToken       string    `json:"sessionToken,omitempty" db:"session_token"`
-	SecurityQuestion   string    `json:"securityQuestion,omitempty" db:"security_question"`
-	SecurityAnswerHash string    `json:"-" db:"security_answer_hash"` // Never include in JSON responses
-	CreatedAt          time.Time `json:"createdAt" db:"created_at"`
-	LastActive         time.Time `json:"lastActive" db:"last_active"`
-	TotalGamesPlayed   int       `json:"totalGamesPlayed" db:"total_games_played"`
-	FavoriteDifficulty string    `json:"favoriteDifficulty" db:"favorite_difficulty"`
+	ID                 int        `json:"id" db:"id"`
+	Username           string     `json:"username" db:"username"`
+	PasswordHash       string     `json:"-" db:"password_hash"` // Never include in JSON responses
+	DisplayName        string     `json:"displayName" db:"display_name"`
+	AvatarURL          string     `json:"avatarUrl,omitempty" db:"avatar_url"`
+	IsGuest            bool       `json:"isGuest" db:"is_guest"`
+	SessionToken       string     `json:"sessionToken,omitempty" db:"session_token"`
+	SessionExpiresAt   *time.Time `json:"-" db:"session_expires_at"` // Session expiration time
+	SecurityQuestion   string     `json:"securityQuestion,omitempty" db:"security_question"`
+	SecurityAnswerHash string     `json:"-" db:"security_answer_hash"` // Never include in JSON responses
+	CreatedAt          time.Time  `json:"createdAt" db:"created_at"`
+	LastActive         time.Time  `json:"lastActive" db:"last_active"`
+	TotalGamesPlayed   int        `json:"totalGamesPlayed" db:"total_games_played"`
+	FavoriteDifficulty string     `json:"favoriteDifficulty" db:"favorite_difficulty"`
 }
 
 // UserRegistrationRequest for creating new users

@@ -509,6 +509,15 @@ func getMigrations() []Migration {
 				"UPDATE friend_challenges SET expires_at = datetime(created_at, '+2 days') WHERE expires_at > datetime(created_at, '+2 days')",
 			},
 		},
+		{
+			Version:     "2.1",
+			Description: "Add session expiration to users table",
+			SQL: []string{
+				"ALTER TABLE users ADD COLUMN session_expires_at DATETIME",
+				// Set expiration for existing sessions to 7 days from last_active
+				"UPDATE users SET session_expires_at = datetime(last_active, '+7 days') WHERE session_token IS NOT NULL",
+			},
+		},
 	}
 }
 

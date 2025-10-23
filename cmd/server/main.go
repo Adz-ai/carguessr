@@ -31,12 +31,14 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -60,10 +62,6 @@ func main() {
 
 	// Initialize Gin router
 	r := gin.Default()
-
-	// Enable gzip compression for better performance
-	// DISABLED: Causing browser decompression issues with static files
-	// r.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	// Limit request body size (1MB max)
 	r.MaxMultipartMemory = 1 << 20 // 1MB
@@ -122,15 +120,21 @@ func main() {
 	// Strict rate limiter for expensive operations: 2 requests per minute
 	strictLimiter := middleware.NewRateLimiter(rate.Limit(0.033), 2) // 2 requests/minute
 
-	// Get admin key from environment or use a default (should be changed in production)
+	// Get admin key from environment - REQUIRED for security
 	adminKey := os.Getenv("ADMIN_KEY")
 	if adminKey == "" {
-		adminKey = "change-this-in-production-" + strings.ToUpper(strings.ReplaceAll(generateSessionID(), "-", ""))
-		log.Println("⚠️  No ADMIN_KEY set in environment. Generated temporary key (check console)")
-		log.Println("⚠️  Please set ADMIN_KEY environment variable for production use!")
-		// Only display to console, not in logs to prevent credential exposure
-		fmt.Printf("TEMP ADMIN KEY: %s\n", adminKey)
+		log.Fatal("❌ ADMIN_KEY environment variable not set. Cannot start without proper admin key. Set ADMIN_KEY in your .env file or environment variables.")
 	}
+
+	// Prevent use of weak or default admin keys
+	if strings.Contains(strings.ToLower(adminKey), "change-this") ||
+		strings.Contains(strings.ToLower(adminKey), "default") ||
+		strings.Contains(strings.ToLower(adminKey), "temp") ||
+		len(adminKey) < 32 {
+		log.Fatal("❌ ADMIN_KEY is too weak or using a default value. Please set a strong, unique admin key (minimum 32 characters).")
+	}
+
+	log.Println("✅ Admin key validated successfully")
 
 	// Serve static files with no-cache headers to prevent Cloudflare caching issues
 	r.Use(func(c *gin.Context) {
@@ -207,7 +211,34 @@ func main() {
 
 		// Health check (no additional rate limiting)
 		api.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			health := gin.H{
+				"status": "ok",
+				"checks": gin.H{},
+			}
+
+			// Check database connectivity
+			if err := db.Ping(); err != nil {
+				health["status"] = "degraded"
+				health["checks"].(gin.H)["database"] = "unhealthy"
+			} else {
+				health["checks"].(gin.H)["database"] = "healthy"
+			}
+
+			// Check if data sources are available
+			dataSource := gameHandler.GetDataSourceInfo()
+			if dataSource["total_listings"].(int) == 0 {
+				health["status"] = "degraded"
+				health["checks"].(gin.H)["listings"] = "no data available"
+			} else {
+				health["checks"].(gin.H)["listings"] = "healthy"
+			}
+
+			// Return appropriate status code
+			if health["status"] == "degraded" {
+				c.JSON(http.StatusServiceUnavailable, health)
+			} else {
+				c.JSON(http.StatusOK, health)
+			}
 		})
 	}
 
@@ -229,18 +260,42 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	// Create HTTP server with explicit configuration
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
 	}
-}
 
-// generateSessionID creates a random session ID
-func generateSessionID() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 16)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+	// Channel to listen for interrupt signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Server starting on port %s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-quit
+	log.Println("🛑 Shutting down server gracefully...")
+
+	// Stop auto-refresh tickers
+	gameHandler.StopAutoRefresh()
+
+	// Create a deadline for shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Attempt graceful shutdown
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
 	}
-	return string(b)
+
+	// Close database connection
+	db.Close()
+
+	log.Println("✅ Server shutdown complete")
 }

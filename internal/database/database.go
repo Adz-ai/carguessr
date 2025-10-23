@@ -52,6 +52,11 @@ func NewDatabase(dbPath string) (*Database, error) {
 	return database, nil
 }
 
+// Ping checks database connectivity
+func (d *Database) Ping() error {
+	return d.db.Ping()
+}
+
 // Close closes the database connection
 func (d *Database) Close() error {
 	return d.db.Close()
@@ -112,18 +117,19 @@ func (d *Database) CreateUser(user *models.User) error {
 // GetUserBySessionToken retrieves a user by their session token
 func (d *Database) GetUserBySessionToken(token string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, password_hash, avatar_url, session_token, is_guest, 
+		SELECT id, username, display_name, password_hash, avatar_url, session_token, session_expires_at, is_guest,
 		       security_question, security_answer_hash, created_at, last_active, total_games_played, favorite_difficulty
-		FROM users 
+		FROM users
 		WHERE session_token = ?
 	`
 
 	var user models.User
 	var passwordHash, avatarURL, securityQuestion, securityAnswerHash sql.NullString
+	var sessionExpiresAt sql.NullTime
 
 	err := d.db.QueryRow(query, token).Scan(
 		&user.ID, &user.Username, &user.DisplayName, &passwordHash,
-		&avatarURL, &user.SessionToken, &user.IsGuest, &securityQuestion, &securityAnswerHash,
+		&avatarURL, &user.SessionToken, &sessionExpiresAt, &user.IsGuest, &securityQuestion, &securityAnswerHash,
 		&user.CreatedAt, &user.LastActive, &user.TotalGamesPlayed, &user.FavoriteDifficulty,
 	)
 
@@ -146,6 +152,9 @@ func (d *Database) GetUserBySessionToken(token string) (*models.User, error) {
 	}
 	if securityAnswerHash.Valid {
 		user.SecurityAnswerHash = securityAnswerHash.String
+	}
+	if sessionExpiresAt.Valid {
+		user.SessionExpiresAt = &sessionExpiresAt.Time
 	}
 
 	return &user, nil
@@ -250,9 +259,11 @@ func (d *Database) GetUserByDisplayName(displayName string) (*models.User, error
 
 // UpdateUserSession updates a user's session token
 func (d *Database) UpdateUserSession(userID int, sessionToken string) error {
-	query := `UPDATE users SET session_token = ?, last_active = ? WHERE id = ?`
+	// Sessions expire after 7 days
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	query := `UPDATE users SET session_token = ?, session_expires_at = ?, last_active = ? WHERE id = ?`
 
-	_, err := d.db.Exec(query, sessionToken, time.Now(), userID)
+	_, err := d.db.Exec(query, sessionToken, expiresAt, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to update user session: %w", err)
 	}
@@ -849,14 +860,34 @@ func (d *Database) CalculateChallengeRankings(challengeID int, participants []mo
 		}
 	}
 
-	// Update rankings in database
+	// Update rankings in database using a single transaction
+	if len(completedParticipants) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Prepare the statement once
+	stmt, err := tx.Prepare(`UPDATE challenge_participants SET rank_position = ?, final_score = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Execute updates in a single transaction
 	for i, p := range completedParticipants {
 		rank := i + 1
-		query := `UPDATE challenge_participants SET rank_position = ?, final_score = ? WHERE id = ?`
-		_, err := d.db.Exec(query, rank, *p.FinalScore, p.ID)
-		if err != nil {
-			return fmt.Errorf("failed to update ranking: %w", err)
+		if _, err := stmt.Exec(rank, *p.FinalScore, p.ID); err != nil {
+			return fmt.Errorf("failed to update ranking for participant %d: %w", p.ID, err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit rankings: %w", err)
 	}
 
 	return nil

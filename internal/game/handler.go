@@ -2,17 +2,20 @@ package game
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +41,8 @@ type Handler struct {
 	recentlyShown        map[string][]string                 // Track recently shown car IDs per session
 	bonhamsRefreshTicker *time.Ticker                        // Auto-refresh for Bonhams (7 days)
 	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
+	isRefreshingBonhams  atomic.Bool                         // Prevents concurrent Bonhams refreshes
+	isRefreshingLookers  atomic.Bool                         // Prevents concurrent Lookers refreshes
 }
 
 // NewHandler creates a game handler, primes both data sources, and starts refresh schedulers.
@@ -228,8 +233,9 @@ func (h *Handler) CheckGuess(c *gin.Context) {
 		req.ListingID, req.GuessedPrice, req.GameMode)
 
 	// Additional security validation - allow higher values via text input
-	if req.GuessedPrice > 10000000 { // £10 million max
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
+	// Validate price is within reasonable bounds
+	if req.GuessedPrice < 0 || req.GuessedPrice > 10000000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price must be between £0 and £10,000,000"})
 		return
 	}
 
@@ -511,12 +517,18 @@ func (h *Handler) TestScraper(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "data sources info with Easy/Hard mode listings"
 // @Router /api/data-source [get]
 func (h *Handler) GetDataSource(c *gin.Context) {
+	dataSource := h.GetDataSourceInfo()
+	c.JSON(http.StatusOK, dataSource)
+}
+
+// GetDataSourceInfo returns data source information (for health checks and other internal use)
+func (h *Handler) GetDataSourceInfo() gin.H {
 	h.mu.RLock()
 	bonhamsListings := len(h.bonhamsListings)
 	lookersListings := len(h.lookersListings)
 	h.mu.RUnlock()
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"hard_mode": gin.H{
 			"data_source":    "bonhams_auctions",
 			"total_listings": bonhamsListings,
@@ -529,7 +541,7 @@ func (h *Handler) GetDataSource(c *gin.Context) {
 		},
 		"total_listings":  bonhamsListings + lookersListings,
 		"modes_available": []string{"easy", "hard"},
-	})
+	}
 }
 
 // GetAllListings godoc
@@ -770,15 +782,35 @@ func (h *Handler) startAutoRefresh() {
 	go func() {
 		for range h.bonhamsRefreshTicker.C {
 			fmt.Println("⏰ Bonhams auto-refresh triggered (7 days elapsed)")
+
+			// Check if already refreshing
+			if h.isRefreshingBonhams.Load() {
+				fmt.Println("⚠️ Bonhams refresh already in progress, skipping")
+				continue
+			}
+
 			// Check for active games before refreshing
 			if h.hasActiveGames() {
 				fmt.Println("⚠️ Active games detected, postponing Bonhams refresh for 1 hour")
 				time.AfterFunc(1*time.Hour, func() {
-					go h.refreshBonhamsListingsAsync()
+					// Check again if not already refreshing
+					if !h.isRefreshingBonhams.CompareAndSwap(false, true) {
+						fmt.Println("⚠️ Bonhams refresh already in progress, skipping postponed refresh")
+						return
+					}
+					go func() {
+						defer h.isRefreshingBonhams.Store(false)
+						h.refreshBonhamsListingsAsync()
+					}()
 				})
 			} else {
 				// Run refresh in background to avoid blocking gameplay
-				go h.refreshBonhamsListingsAsync()
+				if h.isRefreshingBonhams.CompareAndSwap(false, true) {
+					go func() {
+						defer h.isRefreshingBonhams.Store(false)
+						h.refreshBonhamsListingsAsync()
+					}()
+				}
 			}
 		}
 	}()
@@ -787,15 +819,35 @@ func (h *Handler) startAutoRefresh() {
 	go func() {
 		for range h.lookersRefreshTicker.C {
 			fmt.Println("⏰ Lookers auto-refresh triggered (7 days elapsed)")
+
+			// Check if already refreshing
+			if h.isRefreshingLookers.Load() {
+				fmt.Println("⚠️ Lookers refresh already in progress, skipping")
+				continue
+			}
+
 			// Check for active games before refreshing
 			if h.hasActiveGames() {
 				fmt.Println("⚠️ Active games detected, postponing Lookers refresh for 1 hour")
 				time.AfterFunc(1*time.Hour, func() {
-					go h.refreshLookersListingsAsync()
+					// Check again if not already refreshing
+					if !h.isRefreshingLookers.CompareAndSwap(false, true) {
+						fmt.Println("⚠️ Lookers refresh already in progress, skipping postponed refresh")
+						return
+					}
+					go func() {
+						defer h.isRefreshingLookers.Store(false)
+						h.refreshLookersListingsAsync()
+					}()
 				})
 			} else {
 				// Run refresh in background to avoid blocking gameplay
-				go h.refreshLookersListingsAsync()
+				if h.isRefreshingLookers.CompareAndSwap(false, true) {
+					go func() {
+						defer h.isRefreshingLookers.Store(false)
+						h.refreshLookersListingsAsync()
+					}()
+				}
 			}
 		}
 	}()
@@ -1225,7 +1277,7 @@ func (h *Handler) StartChallenge(c *gin.Context) {
 		h.mu.RUnlock() // Release read lock before processing
 
 		// Shuffle and select 10
-		rand.Shuffle(len(allCars), func(i, j int) {
+		mathrand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
 
@@ -1251,7 +1303,7 @@ func (h *Handler) StartChallenge(c *gin.Context) {
 		h.mu.RUnlock() // Release read lock before processing
 
 		// Shuffle and select 10
-		rand.Shuffle(len(allCars), func(i, j int) {
+		mathrand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
 
@@ -1371,8 +1423,9 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 	}
 
 	// Additional security validation - allow higher values via text input
-	if req.GuessedPrice > 10000000 { // £10 million max
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price cannot exceed £10,000,000"})
+	// Validate price is within reasonable bounds
+	if req.GuessedPrice < 0 || req.GuessedPrice > 10000000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price", "message": "Price must be between £0 and £10,000,000"})
 		return
 	}
 
@@ -1397,57 +1450,48 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock() // Lock for updates
-
+	// Validate session state without holding lock
 	if session.IsComplete {
-		h.mu.Unlock()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Challenge session is already complete"})
 		return
 	}
 
 	if session.CurrentCar >= len(session.Cars) {
-		h.mu.Unlock()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No more cars in this challenge"})
 		return
 	}
 
-	// Get the current car and its original price
+	// Get the current car and look up its price under read lock
 	currentCar := session.Cars[session.CurrentCar]
 	var actualPrice float64
 	var originalURL string
-
-	// Find the original car with the actual price (check both difficulty modes)
 	found := false
 
+	// Use read lock only for looking up car prices
+	h.mu.RLock()
 	// Try Bonhams listings first (hard mode)
-	for _, bonhamsCar := range h.bonhamsListings {
-		if bonhamsCar.ID == currentCar.ID {
-			actualPrice = bonhamsCar.Price
-			originalURL = bonhamsCar.OriginalURL
-			found = true
-			break
-		}
+	if bonhamsCar, exists := h.bonhamsListings[currentCar.ID]; exists {
+		actualPrice = bonhamsCar.Price
+		originalURL = bonhamsCar.OriginalURL
+		found = true
 	}
 
 	// If not found in Bonhams, try Lookers listings (easy mode)
 	if !found {
-		for _, lookersCar := range h.lookersListings {
-			if lookersCar.ID == currentCar.ID {
-				actualPrice = lookersCar.Price
-				originalURL = lookersCar.OriginalURL
-				found = true
-				break
-			}
+		if lookersCar, exists := h.lookersListings[currentCar.ID]; exists {
+			actualPrice = lookersCar.Price
+			originalURL = lookersCar.OriginalURL
+			found = true
 		}
 	}
+	h.mu.RUnlock()
 
 	if !found || actualPrice == 0 {
-		h.mu.Unlock()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not find actual price for this car"})
 		return
 	}
 
-	// Calculate difference and percentage
+	// Calculate difference and percentage (no lock needed)
 	difference := math.Abs(actualPrice - req.GuessedPrice)
 	percentage := (difference / actualPrice) * 100
 
@@ -1464,7 +1508,7 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		Points:       points,
 	}
 
-	// Add to session
+	// Update session (no lock needed - working on copy)
 	session.Guesses = append(session.Guesses, guess)
 	session.TotalScore += points
 	session.CurrentCar++
@@ -1476,19 +1520,18 @@ func (h *Handler) SubmitChallengeGuess(c *gin.Context) {
 		session.CompletedTime = time.Now().Format(time.RFC3339)
 	}
 
-	// Save guess to database
+	// Database operations (no lock needed)
 	if err := h.db.AddChallengeGuess(sessionID, &guess); err != nil {
 		log.Printf("Failed to save challenge guess to database: %v", err)
 	}
 
-	// Update session in database
 	if err := h.db.UpdateChallengeSession(session); err != nil {
 		log.Printf("Failed to update challenge session in database: %v", err)
 	}
 
-	// Also update in-memory storage for backward compatibility
+	// Only lock briefly to update in-memory storage
+	h.mu.Lock()
 	h.challengeSessions[sessionID] = session
-
 	h.mu.Unlock()
 
 	// Create response
@@ -1552,7 +1595,7 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 		h.mu.RUnlock()
 
 		// Shuffle and select 10
-		rand.Shuffle(len(allCars), func(i, j int) {
+		mathrand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
 
@@ -1576,7 +1619,7 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 		h.mu.RUnlock()
 
 		// Shuffle and select 10
-		rand.Shuffle(len(allCars), func(i, j int) {
+		mathrand.Shuffle(len(allCars), func(i, j int) {
 			allCars[i], allCars[j] = allCars[j], allCars[i]
 		})
 
@@ -1610,14 +1653,15 @@ func (h *Handler) CreateTemplateChallenge(difficulty string, userID int) (*model
 	return session, nil
 }
 
-// generateSessionID returns a short, URL-safe identifier used to track anonymous sessions.
+// generateSessionID returns a cryptographically secure, URL-safe identifier used to track anonymous sessions.
 func generateSessionID() string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 16)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("Error generating session ID: %v", err)
+		// Fallback to timestamp-based ID (not ideal but better than failing)
+		return fmt.Sprintf("session_%d", time.Now().UnixNano())
 	}
-	return string(b)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // addToRecentlyShown adds a car ID to the recently shown list for a session
@@ -1653,7 +1697,7 @@ func (h *Handler) selectRandomCarWithHistory(sessionID string, allIDs []string) 
 	const maxAttempts = 20 // Prevent infinite loops
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		randomID := allIDs[rand.Intn(len(allIDs))]
+		randomID := allIDs[mathrand.Intn(len(allIDs))]
 		if !h.isRecentlyShown(sessionID, randomID) {
 			return randomID
 		}
@@ -1661,7 +1705,7 @@ func (h *Handler) selectRandomCarWithHistory(sessionID string, allIDs []string) 
 
 	// If we can't find a non-recent car after maxAttempts, just return any random car
 	// This ensures the game doesn't break if user plays longer than available cars
-	return allIDs[rand.Intn(len(allIDs))]
+	return allIDs[mathrand.Intn(len(allIDs))]
 }
 
 // isValidListingID validates listing ID format
