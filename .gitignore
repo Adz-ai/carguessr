@@ -44,9 +44,7 @@ vendor/
 # Compiled templates
 *.qtpl.go
 
-# Test and debug JSON files
-*.json
-!data/lookers-links.example.json
+# Test and debug JSON files (NOT all JSON - we need package.json, tsconfig.json, etc!)
 test_*.json
 *_response.json
 challenge*.json
