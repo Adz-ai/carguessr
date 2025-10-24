@@ -37,14 +37,8 @@ frontend/
 └── vite.config.ts      # Vite config
 ```
 
-## 📚 Documentation
-
-- `MIGRATION_STATUS.md` - Migration progress
-- `COMPLETION_GUIDE.md` - How to complete the migration
 
 ## 🔧 Development
 
 Dev server: http://localhost:5173
 Backend proxy: http://localhost:8080
-
-See COMPLETION_GUIDE.md for full details.
