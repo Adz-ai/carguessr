@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../../api/client';
 import type { ChallengeParticipant, Challenge } from '../../types';
 
@@ -12,11 +12,7 @@ export const ChallengeLeaderboardModal = ({ challengeCode, onClose }: ChallengeL
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadLeaderboard();
-  }, [challengeCode]);
-
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     setIsLoading(true);
 
     try {
@@ -28,7 +24,11 @@ export const ChallengeLeaderboardModal = ({ challengeCode, onClose }: ChallengeL
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [challengeCode]);
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   return (
     <div className="modal" style={{ display: 'flex' }} onClick={(e) => {

@@ -34,8 +34,9 @@ export const MyChallengesModal = ({
       const data = await apiClient.getMyChallenges();
       setCreatedChallenges(data.created || []);
       setParticipatingChallenges(data.participating || []);
-    } catch (error: any) {
-      showToast(error.message || 'Failed to load challenges', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load challenges';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

@@ -2,6 +2,7 @@ import type {
   CarListing,
   GuessResult,
   LeaderboardEntry,
+  LeaderboardStats,
   Challenge,
   ChallengeParticipant,
   User,
@@ -178,7 +179,7 @@ class APIClient {
     }
   }
 
-  async getProfile(): Promise<{ user: User; leaderboardStats: any }> {
+  async getProfile(): Promise<{ user: User; leaderboardStats: LeaderboardStats }> {
     const response = await fetch('/api/auth/profile', {
       headers: this.getAuthHeaders(),
     });
@@ -276,7 +277,7 @@ class APIClient {
     return result;
   }
 
-  async getChallengeParticipation(challengeCode: string): Promise<{ success: boolean; session: any; challenge: Challenge }> {
+  async getChallengeParticipation(challengeCode: string): Promise<{ success: boolean; session: ChallengeSession; challenge: Challenge }> {
     const response = await fetch(`/api/friends/challenges/${challengeCode}/participation`, {
       headers: this.getAuthHeaders(),
     });

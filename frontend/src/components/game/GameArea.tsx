@@ -49,7 +49,8 @@ export const GameArea = () => {
     } else {
       loadNextCar();
     }
-  }, [mode]); // Don't add challengeSession to dependencies!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]); // Don't add challengeSession to dependencies! It would cause re-initialization
 
   const loadChallengeMode = async () => {
     try {

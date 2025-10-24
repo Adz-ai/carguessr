@@ -26,8 +26,9 @@ export const LoginModal = ({ onClose, onSwitchToRegister, onSwitchToPasswordRese
       showToast('Login successful!', 'success');
       onClose();
       window.location.reload(); // Refresh to update UI
-    } catch (error: any) {
-      showToast(error.message || 'Login failed', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

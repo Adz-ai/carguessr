@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../../api/client';
 import type { LeaderboardEntry, GameMode, Difficulty } from '../../types';
 import { useGameStore } from '../../stores/gameStore';
@@ -14,11 +14,7 @@ export const LeaderboardModal = ({ onClose }: LeaderboardModalProps) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadLeaderboard();
-  }, [selectedMode, selectedDifficulty]);
-
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     setIsLoading(true);
 
     try {
@@ -34,7 +30,11 @@ export const LeaderboardModal = ({ onClose }: LeaderboardModalProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedMode, selectedDifficulty]);
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   const formatScore = (score: number) => {
     return score.toLocaleString();

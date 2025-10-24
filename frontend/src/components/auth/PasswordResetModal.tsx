@@ -29,8 +29,9 @@ export const PasswordResetModal = ({ onClose, onSwitchToLogin }: PasswordResetMo
       setSecurityQuestion(data.securityQuestion);
       setShowSecuritySection(true);
       showToast('Security question retrieved', 'info');
-    } catch (error: any) {
-      showToast(error.message || 'User not found with those credentials', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'User not found with those credentials';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -49,8 +50,9 @@ export const PasswordResetModal = ({ onClose, onSwitchToLogin }: PasswordResetMo
       });
       showToast('Password reset successfully! You can now login.', 'success');
       onSwitchToLogin();
-    } catch (error: any) {
-      showToast(error.message || 'Password reset failed', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Password reset failed';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

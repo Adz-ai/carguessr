@@ -123,9 +123,10 @@ export const ChallengeModals = () => {
       // Fallback: Try to join the challenge
       const joinData = await apiClient.joinChallenge(challengeCode);
       startChallengeWithSession(joinData.sessionId, joinData.challenge.difficulty as Difficulty, challengeCode);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error resuming challenge:', error);
-      showToast(error.message || 'Failed to resume challenge', 'error');
+      const message = error instanceof Error ? error.message : 'Failed to resume challenge';
+      showToast(message, 'error');
     }
   };
 

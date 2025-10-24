@@ -33,8 +33,9 @@ export const JoinChallengeModal = ({ onClose, onSuccess }: JoinChallengeModalPro
       const data = await apiClient.joinChallenge(upperCode);
       showToast(data.message || 'Joined challenge successfully!', 'success');
       onSuccess(data.sessionId, data.challenge.difficulty, upperCode);
-    } catch (error: any) {
-      showToast(error.message || 'Failed to join challenge', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to join challenge';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

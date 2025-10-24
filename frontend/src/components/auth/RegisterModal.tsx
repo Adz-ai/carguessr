@@ -34,8 +34,9 @@ export const RegisterModal = ({ onClose, onSwitchToLogin }: RegisterModalProps) 
       showToast('Account created successfully!', 'success');
       onClose();
       window.location.reload(); // Refresh to update UI
-    } catch (error: any) {
-      showToast(error.message || 'Registration failed', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }

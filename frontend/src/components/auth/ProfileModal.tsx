@@ -55,10 +55,10 @@ export const ProfileModal = ({ onClose }: ProfileModalProps) => {
         challengesCreated: challengesData.created?.length || 0,
         challengesJoined: challengesData.participating?.length || 0,
         favoriteDifficulty: favDiff,
-        challenge_easy_registered_rank: profileData.leaderboardStats?.challenge_easy_registered_rank || 'N/A',
-        challenge_easy_overall_rank: profileData.leaderboardStats?.challenge_easy_overall_rank || 'N/A',
-        challenge_hard_registered_rank: profileData.leaderboardStats?.challenge_hard_registered_rank || 'N/A',
-        challenge_hard_overall_rank: profileData.leaderboardStats?.challenge_hard_overall_rank || 'N/A'
+        challenge_easy_registered_rank: profileData.leaderboardStats?.challenge_easy_registered_rank?.toString() || 'N/A',
+        challenge_easy_overall_rank: profileData.leaderboardStats?.challenge_easy_overall_rank?.toString() || 'N/A',
+        challenge_hard_registered_rank: profileData.leaderboardStats?.challenge_hard_registered_rank?.toString() || 'N/A',
+        challenge_hard_overall_rank: profileData.leaderboardStats?.challenge_hard_overall_rank?.toString() || 'N/A'
       });
     } catch (error) {
       console.error('Failed to load user stats:', error);

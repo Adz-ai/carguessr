@@ -38,8 +38,9 @@ export const CreateChallengeModal = ({ onClose, onSuccess }: CreateChallengeModa
 
       showToast('Challenge created successfully!', 'success');
       onSuccess(data.challengeCode, data.sessionId);
-    } catch (error: any) {
-      showToast(error.message || 'Failed to create challenge', 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create challenge';
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
