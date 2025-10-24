@@ -80,14 +80,16 @@ func main() {
 	config := cors.DefaultConfig()
 	// Allow specific origins instead of wildcard for security
 	allowedOrigins := []string{
-		"http://localhost:8080",    // Development
-		"http://127.0.0.1:8080",    // Development
+		"http://localhost:8080",    // Development (Go server)
+		"http://127.0.0.1:8080",    // Development (Go server)
+		"http://localhost:5173",    // Development (Vite dev server)
+		"http://127.0.0.1:5173",    // Development (Vite dev server)
 		"https://carguessr.uk",     // Production domain
 		"https://www.carguessr.uk", // Production www subdomain
 	}
 	config.AllowOrigins = allowedOrigins
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"} // Aligned with HTTPMethodFilter for consistency
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "X-Session-ID"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "X-Session-ID", "Authorization"}
 	config.ExposeHeaders = []string{"Content-Length", "X-Session-ID"}
 	config.AllowCredentials = true
 	config.MaxAge = 12 * 3600
@@ -139,7 +141,8 @@ func main() {
 
 	// Serve static files with no-cache headers to prevent Cloudflare caching issues
 	r.Use(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/static/") {
+		// Don't cache anything in development
+		if strings.HasPrefix(c.Request.URL.Path, "/static/") || strings.HasPrefix(c.Request.URL.Path, "/assets/") {
 			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 			c.Header("Pragma", "no-cache")
 			c.Header("Expires", "0")
@@ -147,16 +150,27 @@ func main() {
 		c.Next()
 	})
 
-	r.Static("/static", "./static")
-	r.StaticFile("/", "./static/index.html")
-
-	// Diagnostic tools
-	r.StaticFile("/clear-state", "./clear_state.html")
+	// Serve React app static assets
+	r.Static("/assets", "./dist/assets")
+	r.Static("/css", "./dist/css")
+	r.Static("/images", "./dist/images")
+	r.Static("/favicon_io", "./dist/favicon_io")
 
 	// SEO files at root level
-	r.StaticFile("/sitemap.xml", "./static/sitemap.xml")
-	r.StaticFile("/robots.txt", "./static/robots.txt")
-	r.StaticFile("/favicon.ico", "./static/favicon_io/favicon.ico")
+	r.StaticFile("/sitemap.xml", "./dist/sitemap.xml")
+	r.StaticFile("/robots.txt", "./dist/robots.txt")
+	r.StaticFile("/favicon.ico", "./dist/favicon_io/favicon.ico")
+
+	// Serve React app for all non-API routes (SPA routing)
+	r.NoRoute(func(c *gin.Context) {
+		// Don't serve index.html for API routes
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
+			return
+		}
+		// Serve React app
+		c.File("./dist/index.html")
+	})
 
 	// Initialize database
 	dbPath := "./data/carguessr.db"

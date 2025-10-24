@@ -67,7 +67,18 @@ type AuthResponse struct {
 	SessionToken string       `json:"sessionToken,omitempty"`
 }
 
-// Register creates a new user account
+// Register godoc
+// @Summary Register a new user account
+// @Description Creates a new user account with username, password, display name, and security question for password recovery. Password is hashed with bcrypt.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param registration body RegisterRequest true "Registration data"
+// @Success 201 {object} AuthResponse "Account created successfully"
+// @Failure 400 {object} AuthResponse "Invalid request data or validation failed"
+// @Failure 409 {object} AuthResponse "Username or display name already exists"
+// @Failure 500 {object} AuthResponse "Failed to create user account"
+// @Router /api/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -179,7 +190,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login authenticates an existing user
+// Login godoc
+// @Summary Login to an existing account
+// @Description Authenticates a user with username and password. Returns a session token valid for 7 days. Automatically upgrades password hashes to current security standards.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body LoginRequest true "Login credentials"
+// @Success 200 {object} AuthResponse "Login successful"
+// @Failure 400 {object} AuthResponse "Invalid request data"
+// @Failure 401 {object} AuthResponse "Invalid username or password"
+// @Failure 500 {object} AuthResponse "Failed to create session"
+// @Router /api/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -258,7 +280,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// Logout removes the user session
+// Logout godoc
+// @Summary Logout from current session
+// @Description Invalidates the current session token and clears the session cookie. Can be called without authentication.
+// @Tags auth
+// @Produce json
+// @Success 200 {object} AuthResponse "Logout successful"
+// @Router /api/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get current user from context (set by middleware)
 	user, exists := c.Get("user")
@@ -278,7 +306,15 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	})
 }
 
-// GetProfile returns the current user's profile with leaderboard statistics
+// GetProfile godoc
+// @Summary Get current user profile
+// @Description Returns the authenticated user's profile information including leaderboard statistics and rankings. Requires authentication via session token.
+// @Tags auth
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{} "user: User object, leaderboardStats: rankings and stats"
+// @Failure 401 {object} AuthResponse "Not authenticated"
+// @Router /api/auth/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -308,7 +344,20 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	})
 }
 
-// UpdateProfile allows users to update their profile information
+// UpdateProfile godoc
+// @Summary Update user profile
+// @Description Allows authenticated users to update their display name or avatar URL. Display names must be unique.
+// @Tags auth
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param profile body object{displayName=string,avatarUrl=string} true "Profile update data"
+// @Success 200 {object} AuthResponse "Profile updated successfully"
+// @Failure 400 {object} AuthResponse "Invalid request data"
+// @Failure 401 {object} AuthResponse "Not authenticated"
+// @Failure 409 {object} AuthResponse "Display name already exists"
+// @Failure 500 {object} AuthResponse "Failed to update profile"
+// @Router /api/auth/profile [put]
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -370,7 +419,18 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	})
 }
 
-// ResetPassword allows users to reset their password using security question
+// ResetPassword godoc
+// @Summary Reset user password
+// @Description Resets a user's password by verifying their username, display name, and security question answer. Includes timing attack protection.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param reset body models.PasswordResetRequest true "Password reset data"
+// @Success 200 {object} AuthResponse "Password reset successfully"
+// @Failure 400 {object} AuthResponse "Invalid request data"
+// @Failure 401 {object} AuthResponse "Invalid credentials or security answer"
+// @Failure 500 {object} AuthResponse "Failed to update password"
+// @Router /api/auth/reset-password [post]
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	start := time.Now()
 	defer func() {
@@ -444,7 +504,17 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	})
 }
 
-// GetSecurityQuestion returns a user's security question for password reset
+// GetSecurityQuestion godoc
+// @Summary Get security question for password reset
+// @Description Returns a user's security question after verifying their username and display name. Used for password reset flow.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body object{username=string,displayName=string} true "Username and display name"
+// @Success 200 {object} map[string]interface{} "success: true, securityQuestion: string"
+// @Failure 400 {object} map[string]string "Invalid request data"
+// @Failure 404 {object} map[string]string "User not found"
+// @Router /api/auth/security-question [post]
 func (h *AuthHandler) GetSecurityQuestion(c *gin.Context) {
 	var req struct {
 		Username    string `json:"username" binding:"required"`

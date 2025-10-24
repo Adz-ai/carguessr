@@ -37,7 +37,19 @@ func NewFriendsHandler(db *database.Database, gameHandler GameHandlerInterface) 
 	}
 }
 
-// CreateFriendChallenge creates a new friend challenge
+// CreateFriendChallenge godoc
+// @Summary Create a new friend challenge
+// @Description Creates a new multiplayer challenge with a unique 6-character code. The challenge includes 10 pre-selected cars that all participants will guess. Requires authentication.
+// @Tags friends
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param challenge body models.CreateFriendChallengeRequest true "Challenge creation data"
+// @Success 201 {object} map[string]interface{} "success, message, challenge, challengeCode, sessionId, participantCount, shareMessage"
+// @Failure 400 {object} map[string]interface{} "Invalid request data or validation failed"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 500 {object} map[string]interface{} "Failed to create challenge"
+// @Router /api/friends/challenges [post]
 func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 	// Require authentication
 	user, exists := c.Get("user")
@@ -142,7 +154,17 @@ func (h *FriendsHandler) CreateFriendChallenge(c *gin.Context) {
 	})
 }
 
-// GetFriendChallenge gets challenge details by code
+// GetFriendChallenge godoc
+// @Summary Get friend challenge details
+// @Description Returns challenge information including participants and their completion status. Public endpoint - no authentication required.
+// @Tags friends
+// @Produce json
+// @Param code path string true "Challenge code (6 alphanumeric characters)"
+// @Success 200 {object} map[string]interface{} "success, challenge with participants"
+// @Failure 400 {object} map[string]interface{} "Invalid challenge code format"
+// @Failure 404 {object} map[string]interface{} "Challenge not found or expired"
+// @Failure 500 {object} map[string]interface{} "Failed to get participants"
+// @Router /api/friends/challenges/{code} [get]
 func (h *FriendsHandler) GetFriendChallenge(c *gin.Context) {
 	challengeCode := strings.ToUpper(c.Param("code"))
 
@@ -183,7 +205,19 @@ func (h *FriendsHandler) GetFriendChallenge(c *gin.Context) {
 	})
 }
 
-// JoinFriendChallenge allows a user to join an existing challenge
+// JoinFriendChallenge godoc
+// @Summary Join a friend challenge
+// @Description Allows an authenticated user to join an existing challenge using the challenge code. Creates a new session with the same cars as the template.
+// @Tags friends
+// @Security BearerAuth
+// @Produce json
+// @Param code path string true "Challenge code (6 alphanumeric characters)"
+// @Success 200 {object} map[string]interface{} "success, message, sessionId, challenge"
+// @Failure 400 {object} map[string]interface{} "Invalid code, already participating, challenge full, or expired"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 404 {object} map[string]interface{} "Challenge not found"
+// @Failure 500 {object} map[string]interface{} "Failed to join challenge"
+// @Router /api/friends/challenges/{code}/join [post]
 func (h *FriendsHandler) JoinFriendChallenge(c *gin.Context) {
 	// Require authentication
 	user, exists := c.Get("user")
@@ -309,7 +343,17 @@ func (h *FriendsHandler) JoinFriendChallenge(c *gin.Context) {
 	})
 }
 
-// GetChallengeLeaderboard gets the leaderboard for a friend challenge
+// GetChallengeLeaderboard godoc
+// @Summary Get challenge leaderboard
+// @Description Returns ranked list of all participants with their scores and completion status. Public endpoint - no authentication required.
+// @Tags friends
+// @Produce json
+// @Param code path string true "Challenge code (6 alphanumeric characters)"
+// @Success 200 {object} map[string]interface{} "success, challenge, participants (ranked), totalCount"
+// @Failure 400 {object} map[string]interface{} "Invalid challenge code format"
+// @Failure 404 {object} map[string]interface{} "Challenge not found"
+// @Failure 500 {object} map[string]interface{} "Failed to get leaderboard"
+// @Router /api/friends/challenges/{code}/leaderboard [get]
 func (h *FriendsHandler) GetChallengeLeaderboard(c *gin.Context) {
 	challengeCode := strings.ToUpper(c.Param("code"))
 
@@ -370,7 +414,19 @@ func (h *FriendsHandler) GetChallengeLeaderboard(c *gin.Context) {
 	})
 }
 
-// GetUserParticipation gets a user's participation in a specific challenge
+// GetUserParticipation godoc
+// @Summary Get user participation in challenge
+// @Description Returns the authenticated user's participation details and session for a specific challenge. Requires authentication.
+// @Tags friends
+// @Security BearerAuth
+// @Produce json
+// @Param code path string true "Challenge code (6 alphanumeric characters)"
+// @Success 200 {object} map[string]interface{} "success, challenge, participation, session"
+// @Failure 400 {object} map[string]interface{} "Invalid challenge code format"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 404 {object} map[string]interface{} "Challenge not found or not participating"
+// @Failure 500 {object} map[string]interface{} "Failed to get session details"
+// @Router /api/friends/challenges/{code}/participation [get]
 func (h *FriendsHandler) GetUserParticipation(c *gin.Context) {
 	// Require authentication
 	user, exists := c.Get("user")
@@ -431,7 +487,16 @@ func (h *FriendsHandler) GetUserParticipation(c *gin.Context) {
 	})
 }
 
-// GetMyChallenges gets all challenges a user has created or participated in
+// GetMyChallenges godoc
+// @Summary Get user's challenges
+// @Description Returns all challenges the authenticated user has created or is participating in. Requires authentication.
+// @Tags friends
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{} "success, created (array), participating (array)"
+// @Failure 401 {object} map[string]interface{} "Authentication required"
+// @Failure 500 {object} map[string]interface{} "Failed to get challenges"
+// @Router /api/friends/challenges/my-challenges [get]
 func (h *FriendsHandler) GetMyChallenges(c *gin.Context) {
 	// Require authentication
 	user, exists := c.Get("user")
