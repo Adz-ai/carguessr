@@ -266,6 +266,344 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/auth/login": {
+            "post": {
+                "description": "Authenticates a user with username and password. Returns a session token valid for 7 days. Automatically upgrades password hashes to current security standards.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login to an existing account",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "credentials",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid username or password",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create session",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "description": "Invalidates the current session token and clears the session cookie. Can be called without authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout from current session",
+                "responses": {
+                    "200": {
+                        "description": "Logout successful",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's profile information including leaderboard statistics and rankings. Requires authentication via session token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get current user profile",
+                "responses": {
+                    "200": {
+                        "description": "user: User object, leaderboardStats: rankings and stats",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Allows authenticated users to update their display name or avatar URL. Display names must be unique.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Update user profile",
+                "parameters": [
+                    {
+                        "description": "Profile update data",
+                        "name": "profile",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "avatarUrl": {
+                                    "type": "string"
+                                },
+                                "displayName": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Display name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to update profile",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/register": {
+            "post": {
+                "description": "Creates a new user account with username, password, display name, and security question for password recovery. Password is hashed with bcrypt.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register a new user account",
+                "parameters": [
+                    {
+                        "description": "Registration data",
+                        "name": "registration",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Account created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Username or display name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create user account",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/reset-password": {
+            "post": {
+                "description": "Resets a user's password by verifying their username, display name, and security question answer. Includes timing attack protection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Reset user password",
+                "parameters": [
+                    {
+                        "description": "Password reset data",
+                        "name": "reset",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/autotraderguesser_internal_models.PasswordResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password reset successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials or security answer",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to update password",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/security-question": {
+            "post": {
+                "description": "Returns a user's security question after verifying their username and display name. Used for password reset flow.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get security question for password reset",
+                "parameters": [
+                    {
+                        "description": "Username and display name",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "displayName": {
+                                    "type": "string"
+                                },
+                                "username": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success: true, securityQuestion: string",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/challenge/start": {
             "post": {
                 "description": "Starts a new 10-car challenge session with GeoGuessr-style scoring. Supports difficulty query param (easy/hard). Rate limited to 60 requests per minute per IP.",
@@ -292,7 +630,7 @@ const docTemplate = `{
                     "200": {
                         "description": "sessionId, cars array (10 cars with prices hidden), currentCar: 0, totalScore: 0",
                         "schema": {
-                            "$ref": "#/definitions/models.ChallengeSession"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.ChallengeSession"
                         }
                     },
                     "404": {
@@ -339,7 +677,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ChallengeSession"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.ChallengeSession"
                         }
                     },
                     "404": {
@@ -381,7 +719,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.ChallengeGuessRequest"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.ChallengeGuessRequest"
                         }
                     }
                 ],
@@ -389,7 +727,7 @@ const docTemplate = `{
                     "200": {
                         "description": "points earned, totalScore, isLastCar, message, originalUrl",
                         "schema": {
-                            "$ref": "#/definitions/models.ChallengeResponse"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.ChallengeResponse"
                         }
                     },
                     "400": {
@@ -442,7 +780,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.GuessRequest"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.GuessRequest"
                         }
                     }
                 ],
@@ -450,7 +788,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.GuessResponse"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.GuessResponse"
                         }
                     },
                     "400": {
@@ -504,6 +842,335 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/friends/challenges": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new multiplayer challenge with a unique 6-character code. The challenge includes 10 pre-selected cars that all participants will guess. Requires authentication.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Create a new friend challenge",
+                "parameters": [
+                    {
+                        "description": "Challenge creation data",
+                        "name": "challenge",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/autotraderguesser_internal_models.CreateFriendChallengeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "success, message, challenge, challengeCode, sessionId, participantCount, shareMessage",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request data or validation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create challenge",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/friends/challenges/my-challenges": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all challenges the authenticated user has created or is participating in. Requires authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Get user's challenges",
+                "responses": {
+                    "200": {
+                        "description": "success, created (array), participating (array)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get challenges",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/friends/challenges/{code}": {
+            "get": {
+                "description": "Returns challenge information including participants and their completion status. Public endpoint - no authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Get friend challenge details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Challenge code (6 alphanumeric characters)",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success, challenge with participants",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid challenge code format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Challenge not found or expired",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get participants",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/friends/challenges/{code}/join": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Allows an authenticated user to join an existing challenge using the challenge code. Creates a new session with the same cars as the template.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Join a friend challenge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Challenge code (6 alphanumeric characters)",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success, message, sessionId, challenge",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid code, already participating, challenge full, or expired",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Challenge not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to join challenge",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/friends/challenges/{code}/leaderboard": {
+            "get": {
+                "description": "Returns ranked list of all participants with their scores and completion status. Public endpoint - no authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Get challenge leaderboard",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Challenge code (6 alphanumeric characters)",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success, challenge, participants (ranked), totalCount",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid challenge code format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Challenge not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get leaderboard",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/friends/challenges/{code}/participation": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's participation details and session for a specific challenge. Requires authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "friends"
+                ],
+                "summary": "Get user participation in challenge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Challenge code (6 alphanumeric characters)",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success, challenge, participation, session",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid challenge code format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Challenge not found or not participating",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get session details",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/leaderboard": {
             "get": {
                 "description": "Returns the leaderboard optionally filtered by game mode and difficulty, sorted by score (descending for challenge, ascending for streak)",
@@ -540,7 +1207,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.LeaderboardEntry"
+                                "$ref": "#/definitions/autotraderguesser_internal_models.LeaderboardEntry"
                             }
                         }
                     }
@@ -567,7 +1234,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.LeaderboardSubmissionRequest"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.LeaderboardSubmissionRequest"
                         }
                     }
                 ],
@@ -626,7 +1293,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.EnhancedCar"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.EnhancedCar"
                         }
                     },
                     "404": {
@@ -655,7 +1322,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.EnhancedCar"
+                            "$ref": "#/definitions/autotraderguesser_internal_models.EnhancedCar"
                         }
                     },
                     "404": {
@@ -681,7 +1348,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "models.ChallengeGuess": {
+        "autotraderguesser_internal_models.ChallengeGuess": {
             "type": "object",
             "properties": {
                 "actualPrice": {
@@ -708,7 +1375,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ChallengeGuessRequest": {
+        "autotraderguesser_internal_models.ChallengeGuessRequest": {
             "type": "object",
             "required": [
                 "guessedPrice"
@@ -716,11 +1383,12 @@ const docTemplate = `{
             "properties": {
                 "guessedPrice": {
                     "type": "number",
+                    "maximum": 10000000,
                     "minimum": 0
                 }
             }
         },
-        "models.ChallengeResponse": {
+        "autotraderguesser_internal_models.ChallengeResponse": {
             "type": "object",
             "properties": {
                 "actualPrice": {
@@ -765,13 +1433,13 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ChallengeSession": {
+        "autotraderguesser_internal_models.ChallengeSession": {
             "type": "object",
             "properties": {
                 "cars": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.EnhancedCar"
+                        "$ref": "#/definitions/autotraderguesser_internal_models.EnhancedCar"
                     }
                 },
                 "completedTime": {
@@ -786,7 +1454,7 @@ const docTemplate = `{
                 "guesses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.ChallengeGuess"
+                        "$ref": "#/definitions/autotraderguesser_internal_models.ChallengeGuess"
                     }
                 },
                 "isComplete": {
@@ -806,7 +1474,33 @@ const docTemplate = `{
                 }
             }
         },
-        "models.EnhancedCar": {
+        "autotraderguesser_internal_models.CreateFriendChallengeRequest": {
+            "type": "object",
+            "required": [
+                "difficulty",
+                "title"
+            ],
+            "properties": {
+                "difficulty": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "hard"
+                    ]
+                },
+                "maxParticipants": {
+                    "type": "integer",
+                    "maximum": 50,
+                    "minimum": 2
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                }
+            }
+        },
+        "autotraderguesser_internal_models.EnhancedCar": {
             "type": "object",
             "properties": {
                 "auctionDetails": {
@@ -918,7 +1612,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.GuessRequest": {
+        "autotraderguesser_internal_models.GuessRequest": {
             "type": "object",
             "required": [
                 "gameMode",
@@ -944,6 +1638,7 @@ const docTemplate = `{
                 },
                 "guessedPrice": {
                     "type": "number",
+                    "maximum": 10000000,
                     "minimum": 0
                 },
                 "listingId": {
@@ -951,7 +1646,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.GuessResponse": {
+        "autotraderguesser_internal_models.GuessResponse": {
             "type": "object",
             "properties": {
                 "actualPrice": {
@@ -983,7 +1678,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.LeaderboardEntry": {
+        "autotraderguesser_internal_models.LeaderboardEntry": {
             "type": "object",
             "required": [
                 "name"
@@ -1026,7 +1721,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.LeaderboardSubmissionRequest": {
+        "autotraderguesser_internal_models.LeaderboardSubmissionRequest": {
             "type": "object",
             "required": [
                 "gameMode",
@@ -1060,6 +1755,136 @@ const docTemplate = `{
                 },
                 "sessionId": {
                     "type": "string"
+                }
+            }
+        },
+        "autotraderguesser_internal_models.PasswordResetRequest": {
+            "type": "object",
+            "required": [
+                "displayName",
+                "newPassword",
+                "securityAnswer",
+                "username"
+            ],
+            "properties": {
+                "displayName": {
+                    "type": "string"
+                },
+                "newPassword": {
+                    "type": "string",
+                    "minLength": 6
+                },
+                "securityAnswer": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "autotraderguesser_internal_models.User": {
+            "type": "object",
+            "properties": {
+                "avatarUrl": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "favoriteDifficulty": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isGuest": {
+                    "type": "boolean"
+                },
+                "lastActive": {
+                    "type": "string"
+                },
+                "securityQuestion": {
+                    "type": "string"
+                },
+                "sessionToken": {
+                    "type": "string"
+                },
+                "totalGamesPlayed": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handlers.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "sessionToken": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "user": {
+                    "$ref": "#/definitions/autotraderguesser_internal_models.User"
+                }
+            }
+        },
+        "internal_handlers.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handlers.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "displayName",
+                "password",
+                "securityAnswer",
+                "securityQuestion",
+                "username"
+            ],
+            "properties": {
+                "displayName": {
+                    "type": "string",
+                    "maxLength": 30,
+                    "minLength": 1
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 6
+                },
+                "securityAnswer": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "securityQuestion": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 5
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 3
                 }
             }
         }

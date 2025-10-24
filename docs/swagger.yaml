@@ -1,6 +1,6 @@
 basePath: /
 definitions:
-  models.ChallengeGuess:
+  autotraderguesser_internal_models.ChallengeGuess:
     properties:
       actualPrice:
         type: number
@@ -18,15 +18,16 @@ definitions:
       points:
         type: integer
     type: object
-  models.ChallengeGuessRequest:
+  autotraderguesser_internal_models.ChallengeGuessRequest:
     properties:
       guessedPrice:
+        maximum: 10000000
         minimum: 0
         type: number
     required:
     - guessedPrice
     type: object
-  models.ChallengeResponse:
+  autotraderguesser_internal_models.ChallengeResponse:
     properties:
       actualPrice:
         type: number
@@ -56,11 +57,11 @@ definitions:
       totalScore:
         type: integer
     type: object
-  models.ChallengeSession:
+  autotraderguesser_internal_models.ChallengeSession:
     properties:
       cars:
         items:
-          $ref: '#/definitions/models.EnhancedCar'
+          $ref: '#/definitions/autotraderguesser_internal_models.EnhancedCar'
         type: array
       completedTime:
         type: string
@@ -70,7 +71,7 @@ definitions:
         type: string
       guesses:
         items:
-          $ref: '#/definitions/models.ChallengeGuess'
+          $ref: '#/definitions/autotraderguesser_internal_models.ChallengeGuess'
         type: array
       isComplete:
         type: boolean
@@ -83,7 +84,26 @@ definitions:
       userId:
         type: integer
     type: object
-  models.EnhancedCar:
+  autotraderguesser_internal_models.CreateFriendChallengeRequest:
+    properties:
+      difficulty:
+        enum:
+        - easy
+        - hard
+        type: string
+      maxParticipants:
+        maximum: 50
+        minimum: 2
+        type: integer
+      title:
+        maxLength: 100
+        minLength: 1
+        type: string
+    required:
+    - difficulty
+    - title
+    type: object
+  autotraderguesser_internal_models.EnhancedCar:
     properties:
       auctionDetails:
         description: Flag indicating this is auction data
@@ -162,7 +182,7 @@ definitions:
       year:
         type: integer
     type: object
-  models.GuessRequest:
+  autotraderguesser_internal_models.GuessRequest:
     properties:
       difficulty:
         description: Default to hard for backward compatibility
@@ -177,6 +197,7 @@ definitions:
         - challenge
         type: string
       guessedPrice:
+        maximum: 10000000
         minimum: 0
         type: number
       listingId:
@@ -186,7 +207,7 @@ definitions:
     - guessedPrice
     - listingId
     type: object
-  models.GuessResponse:
+  autotraderguesser_internal_models.GuessResponse:
     properties:
       actualPrice:
         type: number
@@ -207,7 +228,7 @@ definitions:
       score:
         type: integer
     type: object
-  models.LeaderboardEntry:
+  autotraderguesser_internal_models.LeaderboardEntry:
     properties:
       date:
         description: Formatted date for JSON response
@@ -237,7 +258,7 @@ definitions:
     required:
     - name
     type: object
-  models.LeaderboardSubmissionRequest:
+  autotraderguesser_internal_models.LeaderboardSubmissionRequest:
     properties:
       difficulty:
         description: Default to hard for backward compatibility
@@ -263,6 +284,97 @@ definitions:
     - gameMode
     - name
     - score
+    type: object
+  autotraderguesser_internal_models.PasswordResetRequest:
+    properties:
+      displayName:
+        type: string
+      newPassword:
+        minLength: 6
+        type: string
+      securityAnswer:
+        type: string
+      username:
+        type: string
+    required:
+    - displayName
+    - newPassword
+    - securityAnswer
+    - username
+    type: object
+  autotraderguesser_internal_models.User:
+    properties:
+      avatarUrl:
+        type: string
+      createdAt:
+        type: string
+      displayName:
+        type: string
+      favoriteDifficulty:
+        type: string
+      id:
+        type: integer
+      isGuest:
+        type: boolean
+      lastActive:
+        type: string
+      securityQuestion:
+        type: string
+      sessionToken:
+        type: string
+      totalGamesPlayed:
+        type: integer
+      username:
+        type: string
+    type: object
+  internal_handlers.AuthResponse:
+    properties:
+      message:
+        type: string
+      sessionToken:
+        type: string
+      success:
+        type: boolean
+      user:
+        $ref: '#/definitions/autotraderguesser_internal_models.User'
+    type: object
+  internal_handlers.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  internal_handlers.RegisterRequest:
+    properties:
+      displayName:
+        maxLength: 30
+        minLength: 1
+        type: string
+      password:
+        minLength: 6
+        type: string
+      securityAnswer:
+        maxLength: 100
+        minLength: 2
+        type: string
+      securityQuestion:
+        maxLength: 200
+        minLength: 5
+        type: string
+      username:
+        maxLength: 20
+        minLength: 3
+        type: string
+    required:
+    - displayName
+    - password
+    - securityAnswer
+    - securityQuestion
+    - username
     type: object
 host: localhost:8080
 info:
@@ -445,6 +557,233 @@ paths:
       summary: Test the car scraper directly (Admin Only)
       tags:
       - admin
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with username and password. Returns a session
+        token valid for 7 days. Automatically upgrades password hashes to current
+        security standards.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "401":
+          description: Invalid username or password
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "500":
+          description: Failed to create session
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      summary: Login to an existing account
+      tags:
+      - auth
+  /api/auth/logout:
+    post:
+      description: Invalidates the current session token and clears the session cookie.
+        Can be called without authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      summary: Logout from current session
+      tags:
+      - auth
+  /api/auth/profile:
+    get:
+      description: Returns the authenticated user's profile information including
+        leaderboard statistics and rankings. Requires authentication via session token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'user: User object, leaderboardStats: rankings and stats'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user profile
+      tags:
+      - auth
+    put:
+      consumes:
+      - application/json
+      description: Allows authenticated users to update their display name or avatar
+        URL. Display names must be unique.
+      parameters:
+      - description: Profile update data
+        in: body
+        name: profile
+        required: true
+        schema:
+          properties:
+            avatarUrl:
+              type: string
+            displayName:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "409":
+          description: Display name already exists
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "500":
+          description: Failed to update profile
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user profile
+      tags:
+      - auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with username, password, display name,
+        and security question for password recovery. Password is hashed with bcrypt.
+      parameters:
+      - description: Registration data
+        in: body
+        name: registration
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account created successfully
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Invalid request data or validation failed
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "409":
+          description: Username or display name already exists
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "500":
+          description: Failed to create user account
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      summary: Register a new user account
+      tags:
+      - auth
+  /api/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Resets a user's password by verifying their username, display name,
+        and security question answer. Includes timing attack protection.
+      parameters:
+      - description: Password reset data
+        in: body
+        name: reset
+        required: true
+        schema:
+          $ref: '#/definitions/autotraderguesser_internal_models.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "401":
+          description: Invalid credentials or security answer
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "500":
+          description: Failed to update password
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+      summary: Reset user password
+      tags:
+      - auth
+  /api/auth/security-question:
+    post:
+      consumes:
+      - application/json
+      description: Returns a user's security question after verifying their username
+        and display name. Used for password reset flow.
+      parameters:
+      - description: Username and display name
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            displayName:
+              type: string
+            username:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'success: true, securityQuestion: string'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request data
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get security question for password reset
+      tags:
+      - auth
   /api/challenge/{sessionId}:
     get:
       description: Returns the current state of a challenge session
@@ -460,7 +799,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.ChallengeSession'
+            $ref: '#/definitions/autotraderguesser_internal_models.ChallengeSession'
         "404":
           description: 'error: Session not found'
           schema:
@@ -488,14 +827,14 @@ paths:
         name: guess
         required: true
         schema:
-          $ref: '#/definitions/models.ChallengeGuessRequest'
+          $ref: '#/definitions/autotraderguesser_internal_models.ChallengeGuessRequest'
       produces:
       - application/json
       responses:
         "200":
           description: points earned, totalScore, isLastCar, message, originalUrl
           schema:
-            $ref: '#/definitions/models.ChallengeResponse'
+            $ref: '#/definitions/autotraderguesser_internal_models.ChallengeResponse'
         "400":
           description: 'error: Invalid request, session complete, or price exceeds
             maximum'
@@ -538,7 +877,7 @@ paths:
           description: 'sessionId, cars array (10 cars with prices hidden), currentCar:
             0, totalScore: 0'
           schema:
-            $ref: '#/definitions/models.ChallengeSession'
+            $ref: '#/definitions/autotraderguesser_internal_models.ChallengeSession'
         "404":
           description: 'error: Not enough cars available for challenge mode'
           schema:
@@ -566,14 +905,14 @@ paths:
         name: guess
         required: true
         schema:
-          $ref: '#/definitions/models.GuessRequest'
+          $ref: '#/definitions/autotraderguesser_internal_models.GuessRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.GuessResponse'
+            $ref: '#/definitions/autotraderguesser_internal_models.GuessResponse'
         "400":
           description: 'error: Invalid request or price exceeds maximum'
           schema:
@@ -610,6 +949,234 @@ paths:
       summary: Get current data source information
       tags:
       - debug
+  /api/friends/challenges:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new multiplayer challenge with a unique 6-character code.
+        The challenge includes 10 pre-selected cars that all participants will guess.
+        Requires authentication.
+      parameters:
+      - description: Challenge creation data
+        in: body
+        name: challenge
+        required: true
+        schema:
+          $ref: '#/definitions/autotraderguesser_internal_models.CreateFriendChallengeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success, message, challenge, challengeCode, sessionId, participantCount,
+            shareMessage
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request data or validation failed
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to create challenge
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new friend challenge
+      tags:
+      - friends
+  /api/friends/challenges/{code}:
+    get:
+      description: Returns challenge information including participants and their
+        completion status. Public endpoint - no authentication required.
+      parameters:
+      - description: Challenge code (6 alphanumeric characters)
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success, challenge with participants
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid challenge code format
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Challenge not found or expired
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to get participants
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get friend challenge details
+      tags:
+      - friends
+  /api/friends/challenges/{code}/join:
+    post:
+      description: Allows an authenticated user to join an existing challenge using
+        the challenge code. Creates a new session with the same cars as the template.
+      parameters:
+      - description: Challenge code (6 alphanumeric characters)
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success, message, sessionId, challenge
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid code, already participating, challenge full, or expired
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Challenge not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to join challenge
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Join a friend challenge
+      tags:
+      - friends
+  /api/friends/challenges/{code}/leaderboard:
+    get:
+      description: Returns ranked list of all participants with their scores and completion
+        status. Public endpoint - no authentication required.
+      parameters:
+      - description: Challenge code (6 alphanumeric characters)
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success, challenge, participants (ranked), totalCount
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid challenge code format
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Challenge not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to get leaderboard
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get challenge leaderboard
+      tags:
+      - friends
+  /api/friends/challenges/{code}/participation:
+    get:
+      description: Returns the authenticated user's participation details and session
+        for a specific challenge. Requires authentication.
+      parameters:
+      - description: Challenge code (6 alphanumeric characters)
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success, challenge, participation, session
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid challenge code format
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Challenge not found or not participating
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to get session details
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user participation in challenge
+      tags:
+      - friends
+  /api/friends/challenges/my-challenges:
+    get:
+      description: Returns all challenges the authenticated user has created or is
+        participating in. Requires authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success, created (array), participating (array)
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to get challenges
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user's challenges
+      tags:
+      - friends
   /api/leaderboard:
     get:
       description: Returns the leaderboard optionally filtered by game mode and difficulty,
@@ -634,7 +1201,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.LeaderboardEntry'
+              $ref: '#/definitions/autotraderguesser_internal_models.LeaderboardEntry'
             type: array
       summary: Get the game leaderboard
       tags:
@@ -651,7 +1218,7 @@ paths:
         name: submission
         required: true
         schema:
-          $ref: '#/definitions/models.LeaderboardSubmissionRequest'
+          $ref: '#/definitions/autotraderguesser_internal_models.LeaderboardSubmissionRequest'
       produces:
       - application/json
       responses:
@@ -693,7 +1260,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.EnhancedCar'
+            $ref: '#/definitions/autotraderguesser_internal_models.EnhancedCar'
         "404":
           description: 'error: No listings available'
           schema:
@@ -713,7 +1280,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.EnhancedCar'
+            $ref: '#/definitions/autotraderguesser_internal_models.EnhancedCar'
         "404":
           description: 'error: No listings available'
           schema:
