@@ -44,7 +44,7 @@ vendor/
 # Compiled templates
 *.qtpl.go
 
-# Test and debug JSON files (NOT all JSON - we need package.json, tsconfig.json, etc!)
+# Test and debug JSON files
 test_*.json
 *_response.json
 challenge*.json
@@ -54,6 +54,7 @@ fresh_*.json
 join_*.json
 guest_*.json
 hard_*.json
+*_cache.json
 
 # Development authentication files
 cookies.txt
