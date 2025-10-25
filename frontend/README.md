@@ -2,7 +2,7 @@
 
 This is the migrated React frontend for CarGuessr, a car price guessing game.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Install dependencies
@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 frontend/
@@ -38,7 +38,7 @@ frontend/
 ```
 
 
-## 🔧 Development
+## Development
 
 Dev server: http://localhost:5173
 Backend proxy: http://localhost:8080

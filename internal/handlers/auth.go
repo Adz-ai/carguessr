@@ -239,7 +239,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		if err == nil {
 			// Update password with new hash (ignore errors - session creation is more important)
 			if err := h.db.UpdateUserPassword(user.ID, string(newHash)); err == nil {
-				fmt.Printf("✅ Upgraded password hash for user %s from cost %d to %d\n", user.Username, currentHashCost, bcryptCost)
+				fmt.Printf("Upgraded password hash for user %s from cost %d to %d\n", user.Username, currentHashCost, bcryptCost)
 			}
 		}
 	}

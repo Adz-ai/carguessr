@@ -30,25 +30,25 @@ const (
 func LoadBonhamsFromCache() ([]*models.BonhamsCar, bool) {
 	file, err := os.Open(BonhamsCacheFileName)
 	if err != nil {
-		fmt.Println("📁 No Bonhams cache file found, will scrape fresh data")
+		fmt.Println("No Bonhams cache file found, will scrape fresh data")
 		return nil, false
 	}
 	defer file.Close()
 
 	var cache BonhamsCache
 	if err := json.NewDecoder(file).Decode(&cache); err != nil {
-		fmt.Printf("❌ Error reading Bonhams cache file: %v\n", err)
+		fmt.Printf("ERROR: Error reading Bonhams cache file: %v\n", err)
 		return nil, false
 	}
 
 	// Check if cache is expired
 	if time.Since(cache.Timestamp) > BonhamsCacheExpiry {
-		fmt.Printf("⏰ Bonhams cache expired (%.1f days old), will refresh\n", time.Since(cache.Timestamp).Hours()/24)
+		fmt.Printf("Bonhams cache expired (%.1f days old), will refresh\n", time.Since(cache.Timestamp).Hours()/24)
 		return nil, false
 	}
 
 	daysRemaining := (BonhamsCacheExpiry - time.Since(cache.Timestamp)).Hours() / 24
-	fmt.Printf("✅ Loaded %d Bonhams cars from cache (updated %.1f days ago, %.1f days until refresh)\n",
+	fmt.Printf("Loaded %d Bonhams cars from cache (updated %.1f days ago, %.1f days until refresh)\n",
 		len(cache.Data), time.Since(cache.Timestamp).Hours()/24, daysRemaining)
 	return cache.Data, true
 }
@@ -57,25 +57,25 @@ func LoadBonhamsFromCache() ([]*models.BonhamsCar, bool) {
 func LoadLookersFromCache() ([]*models.LookersCar, bool) {
 	file, err := os.Open(LookersCacheFileName)
 	if err != nil {
-		fmt.Println("📁 No Lookers cache file found, will scrape fresh data")
+		fmt.Println("No Lookers cache file found, will scrape fresh data")
 		return nil, false
 	}
 	defer file.Close()
 
 	var cache LookersCache
 	if err := json.NewDecoder(file).Decode(&cache); err != nil {
-		fmt.Printf("❌ Error reading Lookers cache file: %v\n", err)
+		fmt.Printf("ERROR: Error reading Lookers cache file: %v\n", err)
 		return nil, false
 	}
 
 	// Check if cache is expired
 	if time.Since(cache.Timestamp) > LookersCacheExpiry {
-		fmt.Printf("⏰ Lookers cache expired (%.1f days old), will refresh\n", time.Since(cache.Timestamp).Hours()/24)
+		fmt.Printf("Lookers cache expired (%.1f days old), will refresh\n", time.Since(cache.Timestamp).Hours()/24)
 		return nil, false
 	}
 
 	daysRemaining := (LookersCacheExpiry - time.Since(cache.Timestamp)).Hours() / 24
-	fmt.Printf("✅ Loaded %d Lookers cars from cache (updated %.1f days ago, %.1f days until refresh)\n",
+	fmt.Printf("Loaded %d Lookers cars from cache (updated %.1f days ago, %.1f days until refresh)\n",
 		len(cache.Data), time.Since(cache.Timestamp).Hours()/24, daysRemaining)
 	return cache.Data, true
 }
@@ -102,7 +102,7 @@ func SaveBonhamsToCache(listings []*models.BonhamsCar) error {
 		return fmt.Errorf("failed to encode Bonhams cache: %v", err)
 	}
 
-	fmt.Printf("💾 Cached %d Bonhams listings to %s\n", len(listings), BonhamsCacheFileName)
+	fmt.Printf("Cached %d Bonhams listings to %s\n", len(listings), BonhamsCacheFileName)
 	return nil
 }
 
@@ -123,7 +123,7 @@ func SaveLookersToCache(listings []*models.LookersCar) error {
 		return fmt.Errorf("failed to encode Lookers cache: %v", err)
 	}
 
-	fmt.Printf("💾 Cached %d Lookers listings to %s\n", len(listings), LookersCacheFileName)
+	fmt.Printf("Cached %d Lookers listings to %s\n", len(listings), LookersCacheFileName)
 	return nil
 }
 
@@ -220,7 +220,7 @@ func LoadBonhamsFromCacheIgnoreExpiry() ([]*models.BonhamsCar, error) {
 	}
 
 	age := time.Since(cache.Timestamp)
-	fmt.Printf("📦 Loaded %d Bonhams cars from expired cache (%.1f days old)\n",
+	fmt.Printf("Loaded %d Bonhams cars from expired cache (%.1f days old)\n",
 		len(cache.Data), age.Hours()/24)
 	return cache.Data, nil
 }
@@ -239,7 +239,7 @@ func LoadLookersFromCacheIgnoreExpiry() ([]*models.LookersCar, error) {
 	}
 
 	age := time.Since(cache.Timestamp)
-	fmt.Printf("📦 Loaded %d Lookers cars from expired cache (%.1f days old)\n",
+	fmt.Printf("Loaded %d Lookers cars from expired cache (%.1f days old)\n",
 		len(cache.Data), age.Hours()/24)
 	return cache.Data, nil
 }
@@ -257,7 +257,7 @@ func BumpBonhamsExpiry() error {
 		return fmt.Errorf("failed to bump Bonhams expiry: %v", err)
 	}
 
-	fmt.Printf("⏰ Bumped Bonhams cache expiry - valid for another 7 days\n")
+	fmt.Printf("Bumped Bonhams cache expiry - valid for another 7 days\n")
 	return nil
 }
 
@@ -274,6 +274,6 @@ func BumpLookersExpiry() error {
 		return fmt.Errorf("failed to bump Lookers expiry: %v", err)
 	}
 
-	fmt.Printf("⏰ Bumped Lookers cache expiry - valid for another 7 days\n")
+	fmt.Printf("Bumped Lookers cache expiry - valid for another 7 days\n")
 	return nil
 }

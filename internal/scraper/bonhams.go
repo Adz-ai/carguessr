@@ -91,13 +91,13 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		pagesNeeded = 50 // Increased cap for 250 cars
 	}
 
-	fmt.Printf("🔍 Attempting to scrape %d sold listings across %d pages\n", maxListings, pagesNeeded)
+	fmt.Printf("Attempting to scrape %d sold listings across %d pages\n", maxListings, pagesNeeded)
 
 	// Scrape multiple pages
 	for pageNum := 1; pageNum <= pagesNeeded && len(allFoundLinks) < maxListings; pageNum++ {
 		searchURL := fmt.Sprintf("https://carsonline.bonhams.com/en/auctions/results?page=%d", pageNum)
 
-		fmt.Printf("📍 Navigating to page %d: %s\n", pageNum, searchURL)
+		fmt.Printf("Navigating to page %d: %s\n", pageNum, searchURL)
 		if err := page.Navigate(searchURL); err != nil {
 			fmt.Printf("Failed to navigate to page %d: %v\n", pageNum, err)
 			continue
@@ -117,7 +117,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 			"a[href*='/en/listings/']",
 		}
 
-		fmt.Printf("🔍 Looking for car listings on page %d...\n", pageNum)
+		fmt.Printf("Looking for car listings on page %d...\n", pageNum)
 
 		var pageFoundLinks []string
 		for _, selector := range linkSelectors {
@@ -168,7 +168,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 
 						if !isDuplicate {
 							pageFoundLinks = append(pageFoundLinks, fullURL)
-							fmt.Printf("✅ Added sold item: %s\n", fullURL)
+							fmt.Printf("Added sold item: %s\n", fullURL)
 						}
 					}
 				}
@@ -193,7 +193,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 			}
 		}
 
-		fmt.Printf("✅ Page %d: Found %d new links (total: %d)\n", pageNum, len(pageFoundLinks), len(allFoundLinks))
+		fmt.Printf("Page %d: Found %d new links (total: %d)\n", pageNum, len(pageFoundLinks), len(allFoundLinks))
 
 		// Stop if we have enough listings
 		if len(allFoundLinks) >= maxListings {
@@ -206,7 +206,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 		}
 	}
 
-	fmt.Printf("🎉 Found %d unique car listing URLs across %d pages\n", len(allFoundLinks), pagesNeeded)
+	fmt.Printf("Found %d unique car listing URLs across %d pages\n", len(allFoundLinks), pagesNeeded)
 
 	// If no links found with selectors, try JavaScript to find links
 	if len(allFoundLinks) == 0 {
@@ -249,7 +249,7 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 	}
 
 	// Scrape detail pages in parallel
-	fmt.Printf("🚀 Starting parallel scraping of %d cars with %d workers\n", len(allFoundLinks), maxConcurrentScrapers)
+	fmt.Printf("Starting parallel scraping of %d cars with %d workers\n", len(allFoundLinks), maxConcurrentScrapers)
 	startTime := time.Now()
 
 	type result struct {
@@ -273,11 +273,11 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 				car := s.scrapeDetailPageConcurrent(url)
 				if car != nil && car.Price > 0 {
 					resultChan <- result{car: car, url: url}
-					fmt.Printf("[Worker %d] ✅ Success: %s %s %d (£%.0f)\n",
+					fmt.Printf("[Worker %d] Success: %s %s %d (£%.0f)\n",
 						workerID, car.Make, car.Model, car.Year, car.Price)
 				} else {
 					resultChan <- result{car: nil, url: url, err: fmt.Errorf("failed to scrape")}
-					fmt.Printf("[Worker %d] ❌ Failed: %s\n", workerID, url)
+					fmt.Printf("[Worker %d] ERROR: Failed: %s\n", workerID, url)
 				}
 				// Small delay to avoid overwhelming the server
 				time.Sleep(minRequestDelay)
@@ -303,14 +303,14 @@ func (s *BonhamsScraper) scrapeWithBrowser(maxListings int) ([]*models.BonhamsCa
 	}
 
 	elapsed := time.Since(startTime)
-	fmt.Printf("⏱️  Scraping completed in %.2f seconds (%.2f cars/second)\n",
+	fmt.Printf("Scraping completed in %.2f seconds (%.2f cars/second)\n",
 		elapsed.Seconds(), float64(len(cars))/elapsed.Seconds())
 
 	if len(cars) == 0 {
 		return nil, fmt.Errorf("no sold cars could be found from Bonhams")
 	}
 
-	fmt.Printf("🎉 Successfully scraped %d sold cars from Bonhams\n", len(cars))
+	fmt.Printf("Successfully scraped %d sold cars from Bonhams\n", len(cars))
 	return cars, nil
 }
 

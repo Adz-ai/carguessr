@@ -109,35 +109,35 @@ func (s *LookersScraper) ScrapeCarListings() ([]*models.LookersCar, error) {
 		}
 	}
 
-	log.Printf("📊 Starting scrape for %d body types with %d total expected cars", len(bodyTypeConfigs), totalExpected)
+	log.Printf("Starting scrape for %d body types with %d total expected cars", len(bodyTypeConfigs), totalExpected)
 
 	for _, bodyTypeConfig := range bodyTypeConfigs {
-		log.Printf("\n🚗 Processing body type: %s", bodyTypeConfig.BodyType)
+		log.Printf("\nProcessing body type: %s", bodyTypeConfig.BodyType)
 
 		for _, linkConfig := range bodyTypeConfig.Links {
-			log.Printf("  📈 Scraping %d cars with %s sorting", linkConfig.CarsToScrape, linkConfig.SortOrder)
+			log.Printf("  Scraping %d cars with %s sorting", linkConfig.CarsToScrape, linkConfig.SortOrder)
 
 			cars, err := scrapeLookersURL(s.browser, linkConfig.URL, linkConfig.CarsToScrape, bodyTypeConfig.BodyType, linkConfig.SortOrder)
 			if err != nil {
-				log.Printf("❌ Error scraping %s %s: %v", bodyTypeConfig.BodyType, linkConfig.SortOrder, err)
+				log.Printf("ERROR: Error scraping %s %s: %v", bodyTypeConfig.BodyType, linkConfig.SortOrder, err)
 				continue
 			}
 
 			allCars = append(allCars, cars...)
-			log.Printf("  ✅ Added %d cars from %s %s (Total: %d/%d)", len(cars), bodyTypeConfig.BodyType, linkConfig.SortOrder, len(allCars), totalExpected)
+			log.Printf("  Added %d cars from %s %s (Total: %d/%d)", len(cars), bodyTypeConfig.BodyType, linkConfig.SortOrder, len(allCars), totalExpected)
 		}
 	}
 
-	log.Printf("\n🎉 Successfully scraped %d cars from %d body types", len(allCars), len(bodyTypeConfigs))
+	log.Printf("\nSuccessfully scraped %d cars from %d body types", len(allCars), len(bodyTypeConfigs))
 
 	// Deduplicate cars based on ID (URL-based)
-	log.Printf("🔍 Deduplicating cars...")
+	log.Printf("Deduplicating cars...")
 	uniqueCars := deduplicateCars(allCars)
 	duplicatesRemoved := len(allCars) - len(uniqueCars)
 	if duplicatesRemoved > 0 {
-		log.Printf("✅ Removed %d duplicate cars, %d unique cars remaining", duplicatesRemoved, len(uniqueCars))
+		log.Printf("Removed %d duplicate cars, %d unique cars remaining", duplicatesRemoved, len(uniqueCars))
 	} else {
-		log.Printf("✅ No duplicates found, %d unique cars", len(uniqueCars))
+		log.Printf("No duplicates found, %d unique cars", len(uniqueCars))
 	}
 
 	// Print summary by body type
@@ -146,7 +146,7 @@ func (s *LookersScraper) ScrapeCarListings() ([]*models.LookersCar, error) {
 		bodyTypeSummary[car.BodyType]++
 	}
 
-	log.Println("\n📊 Cars by body type (after deduplication):")
+	log.Println("\nCars by body type (after deduplication):")
 	for bodyType, count := range bodyTypeSummary {
 		log.Printf("  %s: %d cars", bodyType, count)
 	}
@@ -452,21 +452,21 @@ func processCarsConc(browser *rod.Browser, carJobs []CarJob) ([]*models.LookersC
 		processedCount++
 
 		if result.Error != nil {
-			log.Printf("❌ Error processing car %d: %v", result.Index+1, result.Error)
+			log.Printf("ERROR: Error processing car %d: %v", result.Index+1, result.Error)
 			continue
 		}
 
 		// Filter out cars with insufficient images (less than 10)
 		if len(result.Car.Images) < 10 {
-			log.Printf("⏭️  Skipping %s - only %d images (need minimum 10)", result.Car.Title, len(result.Car.Images))
+			log.Printf("SKIPPING: Skipping %s - only %d images (need minimum 10)", result.Car.Title, len(result.Car.Images))
 			continue
 		}
 
-		log.Printf("✅ Car approved (%d/%d): %s (%d images)", len(validCars)+1, processedCount, result.Car.Title, len(result.Car.Images))
+		log.Printf("Car approved (%d/%d): %s (%d images)", len(validCars)+1, processedCount, result.Car.Title, len(result.Car.Images))
 		validCars = append(validCars, &result.Car)
 	}
 
-	log.Printf("🎉 Concurrent processing complete: %d approved cars from %d processed", len(validCars), totalJobs)
+	log.Printf("Concurrent processing complete: %d approved cars from %d processed", len(validCars), totalJobs)
 	return validCars, nil
 }
 
@@ -665,7 +665,7 @@ func deduplicateCars(cars []*models.LookersCar) []*models.LookersCar {
 			uniqueCars = append(uniqueCars, car)
 		} else if car.ID != "" {
 			// Log duplicate found for debugging
-			log.Printf("🔄 Duplicate car found: %s (ID: %s)", car.Title, car.ID)
+			log.Printf("DUPLICATE: Duplicate car found: %s (ID: %s)", car.Title, car.ID)
 		}
 	}
 

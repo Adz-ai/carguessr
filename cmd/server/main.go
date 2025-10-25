@@ -129,15 +129,15 @@ func main() {
 	// Get admin key from environment - REQUIRED for security
 	adminKey := os.Getenv("ADMIN_KEY")
 	if adminKey == "" {
-		log.Fatal("❌ ADMIN_KEY environment variable not set. Cannot start without proper admin key. Set ADMIN_KEY in your .env file or environment variables.")
+		log.Fatal("ERROR: ADMIN_KEY environment variable not set. Cannot start without proper admin key. Set ADMIN_KEY in your .env file or environment variables.")
 	}
 
 	// Validate admin key strength
 	if err := validateAdminKey(adminKey); err != nil {
-		log.Fatalf("❌ ADMIN_KEY validation failed: %v", err)
+		log.Fatalf("ERROR: ADMIN_KEY validation failed: %v", err)
 	}
 
-	log.Println("✅ Admin key validated successfully")
+	log.Println("Admin key validated successfully")
 
 	// Serve static files with no-cache headers to prevent Cloudflare caching issues
 	r.Use(func(c *gin.Context) {
@@ -179,7 +179,7 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
-	log.Println("✅ Database initialized successfully")
+	log.Println("Database initialized successfully")
 
 	// Initialize handlers
 	gameHandler := game.NewHandler(db)
@@ -189,7 +189,7 @@ func main() {
 	// Swagger documentation (only in development mode)
 	if gin.Mode() != gin.ReleaseMode {
 		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-		log.Println("📚 Swagger documentation available at /swagger/index.html")
+		log.Println("Swagger documentation available at /swagger/index.html")
 	}
 
 	// Public API routes with general rate limiting
@@ -302,7 +302,7 @@ func main() {
 
 	// Wait for interrupt signal
 	<-quit
-	log.Println("🛑 Shutting down server gracefully...")
+	log.Println("Shutting down server gracefully...")
 
 	// Stop auto-refresh tickers
 	gameHandler.StopAutoRefresh()
@@ -319,7 +319,7 @@ func main() {
 	// Close database connection
 	db.Close()
 
-	log.Println("✅ Server shutdown complete")
+	log.Println("Server shutdown complete")
 }
 
 // validateAdminKey performs comprehensive admin key validation

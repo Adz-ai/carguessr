@@ -30,19 +30,19 @@ import (
 const ListingAmount int = 250
 
 type Handler struct {
-	db                   *database.Database // Database connection
+	db                   *database.Database
 	scraper              *scraper.Scraper
 	bonhamsListings      map[string]*models.BonhamsCar // Hard mode data
 	lookersListings      map[string]*models.LookersCar // Easy mode data
 	mu                   sync.RWMutex
 	zeroScores           map[string]float64
 	streakScores         map[string]int
-	challengeSessions    map[string]*models.ChallengeSession // Store challenge sessions
-	recentlyShown        map[string][]string                 // Track recently shown car IDs per session
-	bonhamsRefreshTicker *time.Ticker                        // Auto-refresh for Bonhams (7 days)
-	lookersRefreshTicker *time.Ticker                        // Auto-refresh for Lookers (7 days)
-	isRefreshingBonhams  atomic.Bool                         // Prevents concurrent Bonhams refreshes
-	isRefreshingLookers  atomic.Bool                         // Prevents concurrent Lookers refreshes
+	challengeSessions    map[string]*models.ChallengeSession
+	recentlyShown        map[string][]string // Track recently shown car IDs per session
+	bonhamsRefreshTicker *time.Ticker
+	lookersRefreshTicker *time.Ticker
+	isRefreshingBonhams  atomic.Bool // Prevents concurrent refreshes
+	isRefreshingLookers  atomic.Bool // Prevents concurrent refreshes
 }
 
 // NewHandler creates a game handler, primes both data sources, and starts refresh schedulers.
@@ -59,19 +59,19 @@ func NewHandler(db *database.Database) *Handler {
 	}
 
 	// Initialize both scrapers before starting (both modes must be ready)
-	fmt.Println("🚀 Initializing CarGuessr data sources...")
-	fmt.Println("   📊 Both Hard Mode (Bonhams) and Easy Mode (Lookers) must be ready before startup")
+	fmt.Println("Initializing CarGuessr data sources...")
+	fmt.Println("   Both Hard Mode (Bonhams) and Easy Mode (Lookers) must be ready before startup")
 
 	h.initializeBonhamsListings()
 	h.initializeLookersListings()
 
 	// Verify both data sources are ready
 	h.verifyDataSourcesReady()
-	fmt.Println("✅ All game modes ready for play!")
+	fmt.Println("All game modes ready for play!")
 
 	// Start automatic refresh timers
 	h.startAutoRefresh()
-	fmt.Printf("🔄 Auto-refresh scheduled:\n")
+	fmt.Printf("Auto-refresh scheduled:\n")
 	fmt.Printf("  Bonhams (Hard): every 7 days (next: %s)\n",
 		time.Now().Add(7*24*time.Hour).Format("Mon, 02 Jan 2006 15:04"))
 	fmt.Printf("  Lookers (Easy): every 7 days (next: %s)\n",
@@ -570,7 +570,7 @@ func (h *Handler) GetAllListings(c *gin.Context) {
 }
 
 func (h *Handler) initializeBonhamsListings() {
-	fmt.Println("🔄 Initializing Bonhams listings for Hard mode...")
+	fmt.Println("Initializing Bonhams listings for Hard mode...")
 
 	// Try to load from cache first
 	if cachedListings, found := cache.LoadBonhamsFromCache(); found {
@@ -579,7 +579,7 @@ func (h *Handler) initializeBonhamsListings() {
 	}
 
 	// Cache miss or expired, scrape fresh data (blocking to ensure Hard mode is ready)
-	fmt.Println("📥 No Bonhams cache found - scraping fresh data before startup...")
+	fmt.Println("No Bonhams cache found - scraping fresh data before startup...")
 	h.refreshBonhamsListings()
 }
 
@@ -593,12 +593,12 @@ func (h *Handler) loadBonhamsListingsFromCache(cachedListings []*models.BonhamsC
 			h.bonhamsListings[bonhamsCar.ID] = bonhamsCar
 		} else {
 			filteredCount++
-			fmt.Printf("⚠️ Filtered cached car %s %s %d (£700 - no price found)\n", bonhamsCar.Make, bonhamsCar.Model, bonhamsCar.Year)
+			fmt.Printf("WARNING: Filtered cached car %s %s %d (£700 - no price found)\n", bonhamsCar.Make, bonhamsCar.Model, bonhamsCar.Year)
 		}
 	}
 
 	if filteredCount > 0 {
-		fmt.Printf("⚠️ Filtered %d cars with £700 price from cache\n", filteredCount)
+		fmt.Printf("WARNING: Filtered %d cars with £700 price from cache\n", filteredCount)
 	}
 }
 
@@ -612,7 +612,7 @@ func (h *Handler) loadLookersFromCache(cachedListings []*models.LookersCar) {
 		h.lookersListings[lookersCar.ID] = lookersCar
 	}
 
-	fmt.Printf("✅ Loaded %d Lookers cars from cache\n", len(cachedListings))
+	fmt.Printf("Loaded %d Lookers cars from cache\n", len(cachedListings))
 }
 
 // verifyDataSourcesReady ensures both Hard and Easy modes have data available
@@ -622,25 +622,25 @@ func (h *Handler) verifyDataSourcesReady() {
 	lookersCount := len(h.lookersListings)
 	h.mu.RUnlock()
 
-	fmt.Printf("🔍 Data source verification:\n")
+	fmt.Printf("Data source verification:\n")
 	fmt.Printf("   Hard Mode (Bonhams): %d cars loaded\n", bonhamsCount)
 	fmt.Printf("   Easy Mode (Lookers): %d cars loaded\n", lookersCount)
 
 	if bonhamsCount == 0 {
-		fmt.Println("❌ WARNING: Hard Mode has no cars - users will see errors!")
+		fmt.Println("WARNING: Hard Mode has no cars - users will see errors!")
 	}
 	if lookersCount == 0 {
-		fmt.Println("❌ WARNING: Easy Mode has no cars - users will see errors!")
+		fmt.Println("WARNING: Easy Mode has no cars - users will see errors!")
 	}
 
 	if bonhamsCount > 0 && lookersCount > 0 {
-		fmt.Println("✅ Both game modes have sufficient data")
+		fmt.Println("Both game modes have sufficient data")
 	}
 }
 
 // initializeLookersListings initializes Lookers listings for Easy mode
 func (h *Handler) initializeLookersListings() {
-	fmt.Println("🔄 Initializing Lookers listings for Easy mode...")
+	fmt.Println("Initializing Lookers listings for Easy mode...")
 
 	// Try to load from cache first
 	if cachedListings, found := cache.LoadLookersFromCache(); found {
@@ -649,12 +649,12 @@ func (h *Handler) initializeLookersListings() {
 	}
 
 	// Cache miss or expired, scrape fresh data (blocking to ensure Easy mode is ready)
-	fmt.Println("📥 No Lookers cache found - scraping fresh data before startup...")
+	fmt.Println("No Lookers cache found - scraping fresh data before startup...")
 	h.refreshLookersListings()
 }
 
 func (h *Handler) refreshBonhamsListings() {
-	fmt.Println("🔄 Refreshing listings from Bonhams Car Auctions...")
+	fmt.Println("Refreshing listings from Bonhams Car Auctions...")
 
 	// Check if USE_BONHAMS_CACHE_ONLY env var is set (temporary fix)
 	useCacheOnly := os.Getenv("USE_BONHAMS_CACHE_ONLY")
@@ -673,13 +673,13 @@ func (h *Handler) refreshBonhamsListings() {
 
 			// Bump expiry
 			if err := cache.BumpBonhamsExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Bonhams cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Bonhams cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Using %d cars from cache-only mode (extended expiry by 7 days)\n", len(h.bonhamsListings))
+			fmt.Printf("Using %d cars from cache-only mode (extended expiry by 7 days)\n", len(h.bonhamsListings))
 			return
 		}
-		fmt.Println("❌ USE_BONHAMS_CACHE_ONLY set but no cache available!")
+		fmt.Println("ERROR: USE_BONHAMS_CACHE_ONLY set but no cache available!")
 	}
 
 	// Get fresh Bonhams data (250 cars with parallel scraping)
@@ -691,7 +691,7 @@ func (h *Handler) refreshBonhamsListings() {
 			if car.Price != 700 {
 				validCars = append(validCars, car)
 			} else {
-				fmt.Printf("⚠️ Filtered out %s %s %d (£700 - no price found)\n", car.Make, car.Model, car.Year)
+				fmt.Printf("WARNING: Filtered out %s %s %d (£700 - no price found)\n", car.Make, car.Model, car.Year)
 			}
 		}
 
@@ -707,16 +707,16 @@ func (h *Handler) refreshBonhamsListings() {
 
 		// Save filtered listings to cache
 		if err := cache.SaveBonhamsToCache(validCars); err != nil {
-			fmt.Printf("⚠️ Failed to save Bonhams cache: %v\n", err)
+			fmt.Printf("WARNING: Failed to save Bonhams cache: %v\n", err)
 		}
 
-		fmt.Printf("✅ Refreshed %d valid cars from Bonhams Car Auctions (%d filtered out)\n", len(validCars), len(bonhamsCars)-len(validCars))
+		fmt.Printf("Refreshed %d valid cars from Bonhams Car Auctions (%d filtered out)\n", len(validCars), len(bonhamsCars)-len(validCars))
 		return
 	}
 
 	// Scraping failed - try to fall back to cached data (even if expired)
-	fmt.Printf("❌ Bonhams scraper failed: %v\n", err)
-	fmt.Println("🔄 Attempting to load from expired cache as fallback...")
+	fmt.Printf("ERROR: Bonhams scraper failed: %v\n", err)
+	fmt.Println("Attempting to load from expired cache as fallback...")
 
 	cachedListings, cacheErr := cache.LoadBonhamsFromCacheIgnoreExpiry()
 	if cacheErr == nil && len(cachedListings) > 0 {
@@ -732,15 +732,15 @@ func (h *Handler) refreshBonhamsListings() {
 
 		// Bump expiry to give us another week before retry
 		if err := cache.BumpBonhamsExpiry(); err != nil {
-			fmt.Printf("⚠️ Failed to bump Bonhams cache expiry: %v\n", err)
+			fmt.Printf("WARNING: Failed to bump Bonhams cache expiry: %v\n", err)
 		}
 
-		fmt.Printf("✅ Using %d cars from fallback cache (extended expiry by 7 days)\n", len(h.bonhamsListings))
+		fmt.Printf("Using %d cars from fallback cache (extended expiry by 7 days)\n", len(h.bonhamsListings))
 		return
 	}
 
 	// No cache available - use minimal mock data as last resort
-	fmt.Println("❌ No cache available, creating minimal mock data for testing...")
+	fmt.Println("ERROR: No cache available, creating minimal mock data for testing...")
 
 	mockCars := []*models.BonhamsCar{
 		{
@@ -781,21 +781,21 @@ func (h *Handler) startAutoRefresh() {
 	// Bonhams auto-refresh goroutine
 	go func() {
 		for range h.bonhamsRefreshTicker.C {
-			fmt.Println("⏰ Bonhams auto-refresh triggered (7 days elapsed)")
+			fmt.Println("Bonhams auto-refresh triggered (7 days elapsed)")
 
 			// Check if already refreshing
 			if h.isRefreshingBonhams.Load() {
-				fmt.Println("⚠️ Bonhams refresh already in progress, skipping")
+				fmt.Println("WARNING: Bonhams refresh already in progress, skipping")
 				continue
 			}
 
 			// Check for active games before refreshing
 			if h.hasActiveGames() {
-				fmt.Println("⚠️ Active games detected, postponing Bonhams refresh for 1 hour")
+				fmt.Println("WARNING: Active games detected, postponing Bonhams refresh for 1 hour")
 				time.AfterFunc(1*time.Hour, func() {
 					// Check again if not already refreshing
 					if !h.isRefreshingBonhams.CompareAndSwap(false, true) {
-						fmt.Println("⚠️ Bonhams refresh already in progress, skipping postponed refresh")
+						fmt.Println("WARNING: Bonhams refresh already in progress, skipping postponed refresh")
 						return
 					}
 					go func() {
@@ -818,21 +818,21 @@ func (h *Handler) startAutoRefresh() {
 	// Lookers auto-refresh goroutine
 	go func() {
 		for range h.lookersRefreshTicker.C {
-			fmt.Println("⏰ Lookers auto-refresh triggered (7 days elapsed)")
+			fmt.Println("Lookers auto-refresh triggered (7 days elapsed)")
 
 			// Check if already refreshing
 			if h.isRefreshingLookers.Load() {
-				fmt.Println("⚠️ Lookers refresh already in progress, skipping")
+				fmt.Println("WARNING: Lookers refresh already in progress, skipping")
 				continue
 			}
 
 			// Check for active games before refreshing
 			if h.hasActiveGames() {
-				fmt.Println("⚠️ Active games detected, postponing Lookers refresh for 1 hour")
+				fmt.Println("WARNING: Active games detected, postponing Lookers refresh for 1 hour")
 				time.AfterFunc(1*time.Hour, func() {
 					// Check again if not already refreshing
 					if !h.isRefreshingLookers.CompareAndSwap(false, true) {
-						fmt.Println("⚠️ Lookers refresh already in progress, skipping postponed refresh")
+						fmt.Println("WARNING: Lookers refresh already in progress, skipping postponed refresh")
 						return
 					}
 					go func() {
@@ -875,12 +875,12 @@ func (h *Handler) hasActiveGames() bool {
 
 // refreshListingsAsync performs a non-blocking refresh that doesn't interrupt gameplay
 func (h *Handler) refreshBonhamsListingsAsync() {
-	fmt.Println("🔄 Starting background refresh (non-blocking)...")
+	fmt.Println("Starting background refresh (non-blocking)...")
 
 	// Check if USE_BONHAMS_CACHE_ONLY env var is set (temporary fix)
 	useCacheOnly := os.Getenv("USE_BONHAMS_CACHE_ONLY")
 	if useCacheOnly == "true" || useCacheOnly == "1" {
-		fmt.Println("⚙️  USE_BONHAMS_CACHE_ONLY is set - loading from cache only")
+		fmt.Println("USE_BONHAMS_CACHE_ONLY is set - loading from cache only")
 		cachedListings, cacheErr := cache.LoadBonhamsFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -895,24 +895,24 @@ func (h *Handler) refreshBonhamsListingsAsync() {
 
 			// Bump expiry
 			if err := cache.BumpBonhamsExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Bonhams cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Bonhams cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Background refresh used cache-only mode: %d cars (was %d, extended expiry by 7 days)\n",
+			fmt.Printf("Background refresh used cache-only mode: %d cars (was %d, extended expiry by 7 days)\n",
 				len(h.bonhamsListings), oldCount)
 			return
 		}
-		fmt.Println("❌ USE_BONHAMS_CACHE_ONLY set but no cache available - keeping existing data")
+		fmt.Println("ERROR: USE_BONHAMS_CACHE_ONLY set but no cache available - keeping existing data")
 		return
 	}
 
 	// Get fresh Bonhams data (this may take a few minutes) - 250 cars with parallel scraping
 	bonhamsCars, err := h.scraper.GetBonhamsListings(ListingAmount)
 	if err != nil || len(bonhamsCars) == 0 {
-		fmt.Printf("❌ Background refresh failed: %v\n", err)
+		fmt.Printf("ERROR: Background refresh failed: %v\n", err)
 
 		// Try to fall back to cached data (even if expired)
-		fmt.Println("🔄 Attempting to load from expired cache as fallback...")
+		fmt.Println("Attempting to load from expired cache as fallback...")
 		cachedListings, cacheErr := cache.LoadBonhamsFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -927,15 +927,15 @@ func (h *Handler) refreshBonhamsListingsAsync() {
 
 			// Bump expiry to give us another week before retry
 			if err := cache.BumpBonhamsExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Bonhams cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Bonhams cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Background refresh used fallback cache: %d cars (was %d, extended expiry by 7 days)\n",
+			fmt.Printf("Background refresh used fallback cache: %d cars (was %d, extended expiry by 7 days)\n",
 				len(h.bonhamsListings), oldCount)
 			return
 		}
 
-		fmt.Println("❌ No cache available for fallback - keeping existing data")
+		fmt.Println("ERROR: No cache available for fallback - keeping existing data")
 		return
 	}
 
@@ -958,21 +958,21 @@ func (h *Handler) refreshBonhamsListingsAsync() {
 
 	// Save to cache (this can take time, but doesn't block gameplay)
 	if err := cache.SaveBonhamsToCache(validCars); err != nil {
-		fmt.Printf("⚠️ Failed to save Bonhams cache during background refresh: %v\n", err)
+		fmt.Printf("WARNING: Failed to save Bonhams cache during background refresh: %v\n", err)
 	}
 
-	fmt.Printf("✅ Background refresh complete: %d cars updated (was %d, filtered %d)\n",
+	fmt.Printf("Background refresh complete: %d cars updated (was %d, filtered %d)\n",
 		len(validCars), oldCount, len(bonhamsCars)-len(validCars))
 }
 
 // refreshLookersListings refreshes Lookers listings for Easy mode
 func (h *Handler) refreshLookersListings() {
-	fmt.Println("🔄 Refreshing Lookers listings for Easy mode...")
+	fmt.Println("Refreshing Lookers listings for Easy mode...")
 
 	// Check if USE_LOOKERS_CACHE_ONLY env var is set (temporary fix)
 	useCacheOnly := os.Getenv("USE_LOOKERS_CACHE_ONLY")
 	if useCacheOnly == "true" || useCacheOnly == "1" {
-		fmt.Println("⚙️  USE_LOOKERS_CACHE_ONLY is set - loading from cache only")
+		fmt.Println("USE_LOOKERS_CACHE_ONLY is set - loading from cache only")
 		cachedListings, cacheErr := cache.LoadLookersFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -984,22 +984,22 @@ func (h *Handler) refreshLookersListings() {
 
 			// Bump expiry
 			if err := cache.BumpLookersExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Lookers cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Lookers cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Using %d cars from cache-only mode (extended expiry by 7 days)\n", len(cachedListings))
+			fmt.Printf("Using %d cars from cache-only mode (extended expiry by 7 days)\n", len(cachedListings))
 			return
 		}
-		fmt.Println("❌ USE_LOOKERS_CACHE_ONLY set but no cache available!")
+		fmt.Println("ERROR: USE_LOOKERS_CACHE_ONLY set but no cache available!")
 	}
 
 	// Get fresh Lookers data (scraper is now stateless)
 	lookersCars, err := h.scraper.GetLookersListings()
 	if err != nil || len(lookersCars) == 0 {
-		fmt.Printf("❌ Lookers scraper failed: %v\n", err)
+		fmt.Printf("ERROR: Lookers scraper failed: %v\n", err)
 
 		// Try to fall back to cached data (even if expired)
-		fmt.Println("🔄 Attempting to load from expired cache as fallback...")
+		fmt.Println("Attempting to load from expired cache as fallback...")
 		cachedListings, cacheErr := cache.LoadLookersFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -1011,14 +1011,14 @@ func (h *Handler) refreshLookersListings() {
 
 			// Bump expiry to give us another week before retry
 			if err := cache.BumpLookersExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Lookers cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Lookers cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Using %d cars from fallback cache (extended expiry by 7 days)\n", len(cachedListings))
+			fmt.Printf("Using %d cars from fallback cache (extended expiry by 7 days)\n", len(cachedListings))
 			return
 		}
 
-		fmt.Println("❌ No cache available for fallback")
+		fmt.Println("ERROR: No cache available for fallback")
 		return
 	}
 
@@ -1033,22 +1033,21 @@ func (h *Handler) refreshLookersListings() {
 		h.lookersListings[lookersCar.ID] = lookersCar
 	}
 
-	// Save to cache
 	if err := cache.SaveLookersToCache(lookersCars); err != nil {
-		fmt.Printf("⚠️ Failed to save Lookers cache: %v\n", err)
+		fmt.Printf("WARNING: Failed to save Lookers cache: %v\n", err)
 	}
 
-	fmt.Printf("✅ Refreshed %d cars from Lookers for Easy mode\n", len(lookersCars))
+	fmt.Printf("Refreshed %d cars from Lookers for Easy mode\n", len(lookersCars))
 }
 
 // refreshLookersListingsAsync performs a non-blocking Lookers refresh that doesn't interrupt gameplay
 func (h *Handler) refreshLookersListingsAsync() {
-	fmt.Println("🔄 Starting Lookers background refresh (non-blocking)...")
+	fmt.Println("Starting Lookers background refresh (non-blocking)...")
 
 	// Check if USE_LOOKERS_CACHE_ONLY env var is set (temporary fix)
 	useCacheOnly := os.Getenv("USE_LOOKERS_CACHE_ONLY")
 	if useCacheOnly == "true" || useCacheOnly == "1" {
-		fmt.Println("⚙️  USE_LOOKERS_CACHE_ONLY is set - loading from cache only")
+		fmt.Println("USE_LOOKERS_CACHE_ONLY is set - loading from cache only")
 		cachedListings, cacheErr := cache.LoadLookersFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -1061,24 +1060,24 @@ func (h *Handler) refreshLookersListingsAsync() {
 
 			// Bump expiry
 			if err := cache.BumpLookersExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Lookers cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Lookers cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Lookers background refresh used cache-only mode: %d cars (was %d, extended expiry by 7 days)\n",
+			fmt.Printf("Lookers background refresh used cache-only mode: %d cars (was %d, extended expiry by 7 days)\n",
 				len(cachedListings), oldCount)
 			return
 		}
-		fmt.Println("❌ USE_LOOKERS_CACHE_ONLY set but no cache available - keeping existing data")
+		fmt.Println("ERROR: USE_LOOKERS_CACHE_ONLY set but no cache available - keeping existing data")
 		return
 	}
 
 	// Get fresh Lookers data (scraper is now stateless)
 	lookersCars, err := h.scraper.GetLookersListings()
 	if err != nil || len(lookersCars) == 0 {
-		fmt.Printf("❌ Lookers background refresh failed: %v\n", err)
+		fmt.Printf("ERROR: Lookers background refresh failed: %v\n", err)
 
 		// Try to fall back to cached data (even if expired)
-		fmt.Println("🔄 Attempting to load from expired cache as fallback...")
+		fmt.Println("Attempting to load from expired cache as fallback...")
 		cachedListings, cacheErr := cache.LoadLookersFromCacheIgnoreExpiry()
 		if cacheErr == nil && len(cachedListings) > 0 {
 			h.mu.Lock()
@@ -1091,15 +1090,15 @@ func (h *Handler) refreshLookersListingsAsync() {
 
 			// Bump expiry to give us another week before retry
 			if err := cache.BumpLookersExpiry(); err != nil {
-				fmt.Printf("⚠️ Failed to bump Lookers cache expiry: %v\n", err)
+				fmt.Printf("WARNING: Failed to bump Lookers cache expiry: %v\n", err)
 			}
 
-			fmt.Printf("✅ Lookers background refresh used fallback cache: %d cars (was %d, extended expiry by 7 days)\n",
+			fmt.Printf("Lookers background refresh used fallback cache: %d cars (was %d, extended expiry by 7 days)\n",
 				len(cachedListings), oldCount)
 			return
 		}
 
-		fmt.Println("❌ No cache available for fallback - keeping existing data")
+		fmt.Println("ERROR: No cache available for fallback - keeping existing data")
 		return
 	}
 
@@ -1114,10 +1113,10 @@ func (h *Handler) refreshLookersListingsAsync() {
 
 	// Save to cache (this can take time, but doesn't block gameplay)
 	if err := cache.SaveLookersToCache(lookersCars); err != nil {
-		fmt.Printf("⚠️ Failed to save Lookers cache during background refresh: %v\n", err)
+		fmt.Printf("WARNING: Failed to save Lookers cache during background refresh: %v\n", err)
 	}
 
-	fmt.Printf("✅ Lookers background refresh complete: %d cars updated (was %d)\n",
+	fmt.Printf("Lookers background refresh complete: %d cars updated (was %d)\n",
 		len(lookersCars), oldCount)
 }
 
@@ -1125,11 +1124,11 @@ func (h *Handler) refreshLookersListingsAsync() {
 func (h *Handler) StopAutoRefresh() {
 	if h.bonhamsRefreshTicker != nil {
 		h.bonhamsRefreshTicker.Stop()
-		fmt.Println("🛑 Bonhams auto-refresh stopped")
+		fmt.Println("Bonhams auto-refresh stopped")
 	}
 	if h.lookersRefreshTicker != nil {
 		h.lookersRefreshTicker.Stop()
-		fmt.Println("🛑 Lookers auto-refresh stopped")
+		fmt.Println("Lookers auto-refresh stopped")
 	}
 }
 
